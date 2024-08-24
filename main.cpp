@@ -8,7 +8,7 @@ int main()
 	ls.Start();
 	LOG_ASYNC_INIT();
 	LOG(L"SYSTEM", SYSTEM, CONSOLE, L"Server StartUp()!");
-	INCREASE_LOG_LEVEL();
+	//INCREASE_LOG_LEVEL();
 	while (!bShutDown)
 	{
 		//Sleep(20);
@@ -18,6 +18,7 @@ int main()
 		}
 	}
 	CLEAR_LOG_ASYNC();
+	__debugbreak();
 	return 0;
 
 }

@@ -9,7 +9,7 @@ struct Session
 	ULONGLONG ullID;
 	BOOL bSendingInProgress;
 	void* pClient;
-	DWORD dwIoCount;
+	int IoCnt;
 	WSAOVERLAPPED recvOverlapped;
 	WSAOVERLAPPED sendOverlapped;
 	RingBuffer recvRB;
