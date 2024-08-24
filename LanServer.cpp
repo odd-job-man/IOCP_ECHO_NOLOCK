@@ -117,7 +117,7 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 		bGQCSRet = GetQueuedCompletionStatus(pLanServer->hcp_, &dwNOBT, (PULONG_PTR)&pSession, (LPOVERLAPPED*)&pOverlapped, INFINITE);
 
 #ifdef GQCSRET
-		LOG_ASYNC(L"GQCS return Session ID : %llu IoCount : %d", pSession->ullID,InterlockedExchange((LONG*)&pSession->IoCnt,pSession->IoCnt));
+		LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, GQCS return Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
 #endif
 
 		if (!pOverlapped && !dwNOBT && !pSession)
