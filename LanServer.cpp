@@ -14,6 +14,8 @@
 //#define WILL_SEND
 //#define WILL_RECV
 
+int g_iCount = 0;
+
 
 
 unsigned __stdcall IOCPWorkerThread(LPVOID arg);
@@ -101,8 +103,6 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 	int addrlen = sizeof(clientaddr);
 	DWORD dwNOBT;
 	BOOL bGQCSRet;
-	DWORD dwIoCount;
-	DWORD dwErrCode;
 
 	pLanServer = (LanServer*)arg;
 
@@ -113,9 +113,9 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 		pSession = nullptr;
 		bGQCSRet = GetQueuedCompletionStatus(pLanServer->hcp_, &dwNOBT, (PULONG_PTR)&pSession, (LPOVERLAPPED*)&pOverlapped, INFINITE);
 
-#ifdef GQCSRET
-		LOG(L"DEBUG", DEBUG, TEXTFILE, L"GQCS return Thread ID : %u, Session ID : %llu", GetCurrentThreadId(), pSession->ullID);
-#endif
+//#ifdef GQCSRET
+//		LOG_ASYNC(L"GQCS return Session ID : %llu", pSession->ullID);
+//#endif
 
 		if (!pOverlapped && !dwNOBT && !pSession)
 			return 0;
@@ -124,7 +124,7 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 		if (&pSession->recvOverlapped == pOverlapped)
 		{
 #ifdef SENDRECV
-			LOG(L"DEBUG", DEBUG, TEXTFILE, L"Recv Complete : %u ID : %llu", GetCurrentThreadId(),pSession->ullID);
+			LOG_ASYNC(L"Recv Complete Session ID : %llu", pSession->ullID);
 #endif
 			SHORT shHeader;
 			Packet pckt;
@@ -158,21 +158,18 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 		}
 		else
 		{
-#ifdef SENDRECV
-			LOG(L"DEBUG", DEBUG, TEXTFILE, L"Send Complete : %u ID : %llu", GetCurrentThreadId(), pSession->ullID);
-#endif
 			int in_prev = pSession->sendRB.iInPos_;
 			int out_prev = pSession->sendRB.iOutPos_;
-
 			pSession->sendRB.MoveOutPos(dwNOBT);
 			int in_after = pSession->sendRB.iInPos_;
 			int out_after = pSession->sendRB.iOutPos_;
-			//LOG(L"DEBUG", DEBUG, TEXTFILE, L"MoveOutPos SendRB in %d -> %d, out %d -> %d, Thread ID : %u", in_prev, in_after, out_prev, out_after, GetCurrentThreadId());
 
-			if (in_after == 0 && out_after == 0)
-			{
+			if (out_after - in_after > 0 && out_after - in_after < 1000)
 				__debugbreak();
-			}
+
+#ifdef SENDRECV
+			LOG_ASYNC(L"Send Complete Session ID : %llu\nMoveOutPos SendRB in %d -> %d, out %d -> %d NOBT : %llu", pSession->ullID, in_prev, in_after, out_prev, out_after, dwNOBT);
+#endif
 			InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
 
 			int iUseSize = pSession->sendRB.GetUseSize();
@@ -273,10 +270,10 @@ BOOL LanServer::SendPacket(ULONGLONG ullID, Packet* pPacket)
 	ReleaseSRWLockShared(&SessionUMapLock_);
 
 	SHORT shHeader = pPacket->GetUsedDataSize();
-	//LOG(L"DEBUG", DEBUG, TEXTFILE, L"SendPacket sendRB Enqueue Before in : %d, out : %d ThreadID : %u", pSession->sendRB.iInPos_, pSession->sendRB.iOutPos_, GetCurrentThreadId());
+	//LOG_ASYNC(L"SendPacket sendRB Enqeueue Before in : %d, out : %d", pSession->sendRB.iInPos_, pSession->sendRB.iOutPos_);
 	pSession->sendRB.Enqueue((const char*)&shHeader, sizeof(shHeader));
 	pSession->sendRB.Enqueue(pPacket->GetBufferPtr(), shHeader);
-	//LOG(L"DEBUG", DEBUG, TEXTFILE, L"SendPacket sendRB Enqueue Out in : %d, out : %d ThreadID : %u", pSession->sendRB.iInPos_, pSession->sendRB.iOutPos_, GetCurrentThreadId());
+	//LOG_ASYNC(L"SendPacket sendRB Enqeueue After in : %d, out : %d", pSession->sendRB.iInPos_, pSession->sendRB.iOutPos_);
 	if(pSession->sendRB.iInPos_ == 0 && pSession->sendRB.iOutPos_ == 0)
 		__debugbreak();
 	return SendPost(pSession);
@@ -300,7 +297,7 @@ BOOL LanServer::RecvPost(Session* pSession)
 	flags = 0;
 	InterlockedIncrement(&(pSession->dwIoCount));
 #ifdef WILL_RECV
-	LOG(L"DEBUG", DEBUG, TEXTFILE, L"RecvPost WSARecv Thread ID : %u Session ID : %llu", GetCurrentThreadId(), pSession->ullID);
+	LOG_ASYNC(L"RecvPost WSARecv Session ID : %llu", pSession->ullID);
 #endif
 	iRecvRet = WSARecv(pSession->sock, wsa, 2, nullptr, &flags, &(pSession->recvOverlapped), nullptr);
 	if (iRecvRet == SOCKET_ERROR)
@@ -328,25 +325,34 @@ lb_release:
 
 BOOL LanServer::SendPost(Session* pSession)
 {
+	//LOG_ASYNC(L"Appear At SendPost");
+	// 현재 값을 TRUE로 바꾼다. 원래 TRUE엿다면 반환값이 TRUE일것이며 그렇다면 현재 SEND 진행중이기 때문에 그냥 빠저나간다
+	// 이 조건문의 위치로 인하여 Out은 바뀌지 않을것임이 보장된다.
+	// 하지만 SendPost 실행주체가 Send완료통지 스레드인 경우에는 in의 위치는 SendPacket으로 인해서 바뀔수가 있다.
+	// iUseSize를 구하는 시점에서의 DirectDequeueSize의 값이 달라질수있다.
+	if (InterlockedExchange((LONG*)&pSession->bSendingInProgress, TRUE) == TRUE)
+		return TRUE;
+
 	WSABUF wsa[2];
 	int iUseSize = pSession->sendRB.GetUseSize();
 	int iDirectDeqSize = pSession->sendRB.DirectDequeueSize();
 	int iBufLen = 0;
 	int iSendRet;
-	DWORD dwRefCnt;
+	DWORD dwIoCount;
 
+	// SendPacket에서 in을 옮겨서 UseSize가 0보다 커진시점에서 Send완료통지가 도착해서 Out을 옮기고 플래그 해제 Recv완료통지 스레드가 먼저 SendPost에 도달해 플래그를 선점한경우 UseSize가 0이나온다.
+	// 여기서 flag를 다시 FALSE로 바꾸어주지 않아서 멈춤발생
 	if (iUseSize == 0)
 	{
-		LOG(L"DEBUG", DEBUG, TEXTFILE, L"SendPost UseSize 0 Thread ID : %u, Session ID : %u", GetCurrentThreadId(), pSession->ullID);
+		InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
 		return TRUE;
 	}
-
-	// 현재 값을 TRUE로 바꾼다. 원래 TRUE엿다면 반환값이 TRUE일것이며 그렇다면 현재 SEND 진행중이기 때문에 그냥 빠저나간다
-	if (InterlockedExchange((LONG*)&pSession->bSendingInProgress, TRUE) == TRUE)
-		return TRUE;
-
+	
 	if (iUseSize <= iDirectDeqSize)
 	{
+		//if (iUseSize != iDirectDeqSize)
+		//	__debugbreak();
+
 		wsa[0].buf = pSession->sendRB.GetReadStartPtr();
 		wsa[0].len = iUseSize;
 		iBufLen = 1;
@@ -361,9 +367,9 @@ BOOL LanServer::SendPost(Session* pSession)
 	}
 
 	ZeroMemory(&(pSession->sendOverlapped), sizeof(WSAOVERLAPPED));
-	dwRefCnt = InterlockedIncrement(&pSession->dwIoCount);
+	dwIoCount = InterlockedIncrement(&pSession->dwIoCount);
 #ifdef WILL_SEND 
-	LOG(L"DEBUG", DEBUG, TEXTFILE, L"SendPost WSASend Thread ID : %u Session ID : %llu", GetCurrentThreadId(), pSession->ullID);
+	LOG_ASYNC(L"SendPost WSASend Session ID : %llu %d Bytes Send", pSession->ullID, iUseSize);
 #endif
 	iSendRet = WSASend(pSession->sock, wsa, iBufLen, nullptr, 0, &(pSession->sendOverlapped), nullptr);
 	if (iSendRet == SOCKET_ERROR)
@@ -375,9 +381,9 @@ BOOL LanServer::SendPost(Session* pSession)
 		}
 		InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
 		InterlockedDecrement(&(pSession->dwIoCount));
-		dwRefCnt = InterlockedDecrement(&(pSession->dwIoCount));
+		dwIoCount = InterlockedDecrement(&(pSession->dwIoCount));
 
-		if (dwRefCnt > 0)
+		if (dwIoCount > 0)
 		{
 			return TRUE;
 		}

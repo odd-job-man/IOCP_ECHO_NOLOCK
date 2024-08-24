@@ -75,6 +75,8 @@ int RingBuffer::GetUseSize(void)
 	int in = iInPos_;
 	int out = iOutPos_;
 	GetUseSize_MACRO(in, out, iRet);
+	//if (iRet > 5000)
+	//	__debugbreak();
 	return iRet;
 }
 
@@ -106,34 +108,13 @@ int RingBuffer::Enqueue(const char* pSource, int iSizeToPut)
 	int in = iInPos_;
 	int out = iOutPos_;
 
-	do {
-		int iUseSize; do {
-			if (in >= out) {
-				iUseSize = in - out;
-			}
-			else {
-				iUseSize = ACTUAL_SIZE - out + in;
-			}
-		} while (0); iFreeSize = BUFFER_SIZE - iUseSize;
-	} while (0);
+	GetFreeSize_MACRO(in, out, iFreeSize);
 	if (iSizeToPut > iFreeSize)
 	{
 		// 반환하는 쪽에서는 연결을 끊어버려야함.
 		return 0;
 	}
-	do {
-		if (in >= out) {
-			if (out > 0) {
-				iDirectEnqueueSize = ACTUAL_SIZE - in;
-			}
-			else {
-				iDirectEnqueueSize = BUFFER_SIZE - in;
-			}
-		}
-		else {
-			iDirectEnqueueSize = out - in - 1;
-		}
-	} while (0); // 2
+	GetDirectEnqueueSize_MACRO(in, out, iDirectEnqueueSize);
 
 	// 직선으로 인큐 가능한사이즈가 넣으려는 사이즈보다 크거나 같으면 한번만 복사
 	if (iDirectEnqueueSize >= iSizeToPut) 
@@ -141,33 +122,21 @@ int RingBuffer::Enqueue(const char* pSource, int iSizeToPut)
 	else // 두번에 나눠서 복사해야함.
 		iFirstSize = iDirectEnqueueSize;
 
-	do {
-		pInStartPos = (Buffer_ + in);
-	} while (0);
+	GetInStartPtr_MACRO(in, pInStartPos);
 	memcpy(pInStartPos, pSource, iFirstSize);
-	do {
-		in = (in + iFirstSize) % (ACTUAL_SIZE);
-	} while (0);;
+	MoveInOrOutPos_MACRO(in, iFirstSize);
 
 	iSecondSize = iSizeToPut - iFirstSize;
 	if (iSecondSize <= 0)
 	{
 		iInPos_ = in;
-		if (in == 0)
-			__debugbreak();
 		return iFirstSize;
 	}
 
-	do {
-		pInStartPos = (Buffer_ + in);
-	} while (0);
+	GetInStartPtr_MACRO(in, pInStartPos);
 	memcpy(pInStartPos, pSource + iFirstSize, iSecondSize);
-	do {
-		in = (in + iSecondSize) % (ACTUAL_SIZE);
-	} while (0);;
+	MoveInOrOutPos_MACRO(in, iSecondSize);
 	iInPos_ = in;
-	if (in == 0)
-		__debugbreak();
 
 	return iFirstSize + iSecondSize;
 }
