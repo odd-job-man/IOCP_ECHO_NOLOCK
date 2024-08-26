@@ -7,7 +7,7 @@
 class IHandler
 {
 public:
-	virtual BOOL Start() = 0;
+	virtual BOOL Start(DWORD dwMaxSession) = 0;
 	//virtual void Stop() = 0;
 	//virtual int GetSessionCount() = 0;
 	//virtual BOOL Disconnect(ULONGLONG ullID) = 0;

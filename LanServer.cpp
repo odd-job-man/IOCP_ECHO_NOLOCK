@@ -19,6 +19,8 @@
 
 int g_iCount = 0;
 
+ULONGLONG g_recv = 0;
+ULONGLONG g_send = 0;
 
 
 unsigned __stdcall IOCPWorkerThread(LPVOID arg);
@@ -28,19 +30,28 @@ ULONGLONG g_ullID;
 
 #define SERVERPORT 6000
 
+#define ZERO_BYTE_SEND
+#define LINGER
+
 SOCKET g_ListenSock;
 
-BOOL LanServer::Start()
+BOOL LanServer::Start(DWORD dwMaxSession)
 {
 	int retval;
 	WSADATA wsa;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+	{
+		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"WSAStartUp Fail ErrCode : %u",WSAGetLastError());
 		__debugbreak();
+	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"WSAStartUp OK!");
 	// NOCT에 0들어가면 논리프로세서 수만큼을 설정함
 	hcp_ = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
 	if (!hcp_)
+	{
+		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"CreateIoCompletionPort Fail ErrCode : %u",WSAGetLastError());
 		__debugbreak();
+	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"Create IOCP OK!");
 
 	SYSTEM_INFO si;
@@ -51,21 +62,30 @@ BOOL LanServer::Start()
 
 	hAcceptThread = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, CREATE_SUSPENDED, nullptr);
 	if (!hAcceptThread)
+	{
+		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE AccpetThread Fail ErrCode : %u", WSAGetLastError());
 		__debugbreak();
+	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE AccpetThread OK!");
 
 	for (DWORD i = 0; i < si.dwNumberOfProcessors; ++i)
 	{
 		hIOCPWorkerThread = (HANDLE)_beginthreadex(NULL, 0, IOCPWorkerThread, this, 0, nullptr);
 		if (!hIOCPWorkerThread)
+		{
+			LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE WorkerThread Fail ErrCode : %u", WSAGetLastError());
 			__debugbreak();
+		}
 		CloseHandle(hIOCPWorkerThread);
 	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE IOCP WorkerThread OK Num : %u!", si.dwNumberOfProcessors);
 
 	g_ListenSock = socket(AF_INET, SOCK_STREAM, 0);
 	if (g_ListenSock == INVALID_SOCKET)
+	{
+		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE Listen SOCKET Fail ErrCode : %u", WSAGetLastError());
 		__debugbreak();
+	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE Listen SOCKET OK");
 
 	// bind
@@ -76,45 +96,55 @@ BOOL LanServer::Start()
 	serveraddr.sin_port = htons(SERVERPORT);
 	retval = bind(g_ListenSock, (SOCKADDR*)&serveraddr, sizeof(serveraddr));
 	if (retval == SOCKET_ERROR)
+	{
+		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"bind Fail ErrCode : %u", WSAGetLastError());
 		__debugbreak();
+	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"bind OK");
 
 	// listen
 	retval = listen(g_ListenSock, SOMAXCONN);
 	if (retval == SOCKET_ERROR)
+	{
+		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"listen Fail ErrCode : %u", WSAGetLastError());
 		__debugbreak();
+	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"listen() OK");
 
+#ifdef LINGER
 	linger linger;
 	linger.l_linger = 0;
 	linger.l_onoff = 1;
 	setsockopt(g_ListenSock, IPPROTO_TCP, SO_LINGER, (char*)&linger, sizeof(linger));
+	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"linger() OK");
+#endif
+
+#ifdef ZERO_BYTE_SEND
+	DWORD dwSendBufSize = 0;
+	setsockopt(g_ListenSock, SOL_SOCKET, SO_SNDBUF, (char*)&dwSendBufSize, sizeof(dwSendBufSize));
+	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"Zerobyte Send OK");
+#endif
+
+	pSessionArr_ = new Session[dwMaxSession];
+	dwMaxSession_ = dwMaxSession;
+	DisconnectStack_.Init(dwMaxSession, sizeof(DWORD));
+	for (int i = dwMaxSession - 1; i >= 0; --i)
+		DisconnectStack_.Push((void**)&i);
+	InitializeCriticalSection(&stackLock_);
 
 	ResumeThread(hAcceptThread);
-
-	InitializeSRWLock(&SessionUMapLock_);
 	return 0;
 }
 
 unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 {
-	LanServer* pLanServer;
-	Session* pSession;
-	WSAOVERLAPPED* pOverlapped;
-	//클라이언트 정보 얻기
-	SOCKADDR_IN clientaddr;
-	int addrlen = sizeof(clientaddr);
-	DWORD dwNOBT;
-	BOOL bGQCSRet;
-
-	pLanServer = (LanServer*)arg;
-
+	LanServer* pLanServer = (LanServer*)arg;
 	while (1)
 	{
-		pOverlapped = nullptr;
-		dwNOBT = 0;
-		pSession = nullptr;
-		bGQCSRet = GetQueuedCompletionStatus(pLanServer->hcp_, &dwNOBT, (PULONG_PTR)&pSession, (LPOVERLAPPED*)&pOverlapped, INFINITE);
+		WSAOVERLAPPED* pOverlapped = nullptr;
+		DWORD dwNOBT = 0;
+		Session* pSession = nullptr;
+		BOOL bGQCSRet = GetQueuedCompletionStatus(pLanServer->hcp_, &dwNOBT, (PULONG_PTR)&pSession, (LPOVERLAPPED*)&pOverlapped, INFINITE);
 
 #ifdef GQCSRET
 		LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, GQCS return Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
@@ -141,15 +171,18 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 			SHORT shHeader;
 			Packet pckt;
 
+#ifdef IO_RET
+			ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
+			LOG_ASYNC(L"Recv Amount : %llu -> %llu", ret - dwNOBT, ret);
+#endif
+
 			pSession->recvRB.MoveInPos(dwNOBT);
 			while (1)
 			{
-				int iPeekRet = pSession->recvRB.Peek((char*)&shHeader, sizeof(shHeader));
-				if (iPeekRet == 0)
+				if (pSession->recvRB.Peek((char*)&shHeader, sizeof(shHeader)) == 0)
 					break;
 
-				int iUseSize = pSession->recvRB.GetUseSize();
-				if (iUseSize < sizeof(shHeader) + shHeader)
+				if (pSession->recvRB.GetUseSize() < sizeof(shHeader) + shHeader)
 					break;
 
 				pSession->recvRB.MoveOutPos(sizeof(shHeader));
@@ -162,6 +195,10 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 		}
 		else
 		{
+#ifdef IO_RET
+			ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
+			LOG_ASYNC(L"ID : %llu, Send Amount : %llu -> %llu", ret - dwNOBT, ret);
+#endif
 			pSession->sendRB.MoveOutPos(dwNOBT);
 #ifdef SENDRECV
 			LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Send Complete Session ID : %llu", GetCurrentThreadId(), pSession->ullID);
@@ -172,9 +209,7 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 				pLanServer->SendPost(pSession);
 		}
 	lb_next:
-		int ioCnt = InterlockedDecrement((LONG*)&pSession->IoCnt);
-		//LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, IoCnt Decre Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
-		if (ioCnt == 0)
+		if (InterlockedDecrement((LONG*)&pSession->IoCnt) == 0)
 			pLanServer->ReleaseSession(pSession);
 	}
 }
@@ -185,7 +220,6 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 	SOCKADDR_IN clientAddr;
 	int addrlen;
 	LanServer* pLanServer = (LanServer*)arg;
-	Session* pSession;
 	addrlen = sizeof(clientAddr);
 
 	while (1)
@@ -193,7 +227,11 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 		clientSock = accept(g_ListenSock, (SOCKADDR*)&clientAddr, &addrlen);
 
 		if (clientSock == INVALID_SOCKET)
+		{
+			DWORD dwErrCode = WSAGetLastError();
 			__debugbreak();
+		}
+
 
 		if (!pLanServer->OnConnectionRequest())
 		{
@@ -201,13 +239,13 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 			continue;
 		}
 
-		pSession = new Session;
+		DWORD dwIndex;
+		EnterCriticalSection(&pLanServer->stackLock_);
+		pLanServer->DisconnectStack_.Pop((void**)&dwIndex);
+		LeaveCriticalSection(&pLanServer->stackLock_);
+		Session* pSession = pLanServer->pSessionArr_ + dwIndex;
 		pSession->Init(clientSock, g_ullID);
 		CreateIoCompletionPort((HANDLE)pSession->sock, pLanServer->hcp_, (ULONG_PTR)pSession, 0);
-
-		AcquireSRWLockExclusive(&pLanServer->SessionUMapLock_);
-		pLanServer->sessionUMap_.insert(std::pair<ULONGLONG, Session*>{g_ullID, pSession});
-		ReleaseSRWLockExclusive(&pLanServer->SessionUMapLock_);
 		++g_ullID;
 
 		// 맨처음 WSARecv 부터 실패한 경우
@@ -218,12 +256,10 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 }
 
 
-#define MAX_SESSION 1000
 BOOL LanServer::OnConnectionRequest()
 {
-	if (SessionNum_ + 1 >= MAX_SESSION)
+	if (SessionNum_ + 1 >= dwMaxSession_)
 		return FALSE;
-
 
 	return TRUE;
 }
@@ -245,14 +281,27 @@ void LanServer::OnRecv(ULONGLONG ullID, Packet* pPacket)
 
 void LanServer::SendPacket(ULONGLONG ullID, Packet* pPacket)
 {
-	AcquireSRWLockShared(&SessionUMapLock_);
-	auto iter = sessionUMap_.find(ullID);
-	Session* pSession = iter->second;
-	ReleaseSRWLockShared(&SessionUMapLock_);
+	Session* pSession = nullptr;
+	for (DWORD i = 0; i < dwMaxSession_; ++i)
+	{
+		if (pSessionArr_[i].ullID == ullID)
+		{
+			pSession = pSessionArr_ + i;
+			break;
+		}
+	}
+
+	if (!pSession)
+		__debugbreak();
 
 	SHORT shHeader = pPacket->GetUsedDataSize();
+	//int in_prev = pSession->sendRB.iInPos_;
+	//int out_prev = pSession->sendRB.iOutPos_;
 	pSession->sendRB.Enqueue((const char*)&shHeader, sizeof(shHeader));
 	pSession->sendRB.Enqueue(pPacket->GetBufferPtr(), shHeader);
+	//int in_after = pSession->sendRB.iInPos_;
+	//int out_after = pSession->sendRB.iOutPos_;
+	//LOG_ASYNC(L"SendPacket in : %d -> %d, out : %d -> %d", in_prev, in_after, out_prev, out_after);
 	SendPost(pSession);
 }
 
@@ -306,6 +355,8 @@ BOOL LanServer::SendPost(Session* pSession)
 
 	WSABUF wsa[2];
 	int iUseSize = pSession->sendRB.GetUseSize();
+	if (iUseSize > 7000)
+		__debugbreak();
 	int iDirectDeqSize = pSession->sendRB.DirectDequeueSize();
 	int iBufLen = 0;
 
@@ -360,13 +411,13 @@ BOOL LanServer::SendPost(Session* pSession)
 
 void LanServer::ReleaseSession(Session* pSession)
 {
-	AcquireSRWLockExclusive(&SessionUMapLock_);
-	sessionUMap_.erase(pSession->ullID);
-	closesocket(pSession->sock);
 #ifdef SESSION_DELETE 
-	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Delete Session Thread ID :%u Session ID : %llu", GetCurrentThreadId(), pSession->ullID);
+	LOG_ASYNC(L"Delete Session : %llu", pSession->ullID);
 #endif
-	delete pSession;
-	ReleaseSRWLockExclusive(&SessionUMapLock_);
+	closesocket(pSession->sock);
+	DWORD dwIndex = pSession - pSessionArr_;
+	EnterCriticalSection(&stackLock_);
+	DisconnectStack_.Push((void**)&dwIndex);
+	LeaveCriticalSection(&stackLock_);
 }
 
