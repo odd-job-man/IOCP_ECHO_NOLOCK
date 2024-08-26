@@ -59,10 +59,12 @@ iPos = (iPos + iMoveSize) % (ACTUAL_SIZE);\
 }while(0);\
 
 // 특이사항 : 원형 큐이기 때문에 할당 크기가 BUFFER_SIZE 보다 1 커야함
+#pragma warning(disable : 26495)
 RingBuffer::RingBuffer(void)
 {
 	iOutPos_ = iInPos_ = 0;
 }
+#pragma warning(default : 26495)
 
 RingBuffer::~RingBuffer(void)
 {
@@ -75,8 +77,6 @@ int RingBuffer::GetUseSize(void)
 	int in = iInPos_;
 	int out = iOutPos_;
 	GetUseSize_MACRO(in, out, iRet);
-	//if (iRet > 5000)
-	//	__debugbreak();
 	return iRet;
 }
 

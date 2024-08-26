@@ -11,11 +11,11 @@
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"LoggerMt.lib")
 
-#define GQCSRET
-#define SENDRECV
-#define WILL_SEND
-#define WILL_RECV
-#define SESSION_DELETE
+//#define GQCSRET
+//#define SENDRECV
+//#define WILL_SEND
+//#define WILL_RECV
+//#define SESSION_DELETE
 
 int g_iCount = 0;
 
@@ -106,6 +106,7 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 	int addrlen = sizeof(clientaddr);
 	DWORD dwNOBT;
 	BOOL bGQCSRet;
+	BOOL bIoRet;
 
 	pLanServer = (LanServer*)arg;
 
@@ -146,60 +147,35 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 				pSession->recvRB.MoveOutPos(sizeof(shHeader));
 				pSession->recvRB.Dequeue(pckt.GetBufferPtr(), shHeader);
 				pckt.MoveWritePos(shHeader);
-				if (!pLanServer->OnRecv(pSession->ullID, &pckt))
-				{
-					pLanServer->ReleaseSession(pSession);
+				if (!(bIoRet = pLanServer->OnRecv(pSession->ullID, &pckt)))
 					goto lb_next;
-				}
-				InterlockedDecrement((LONG*)&pSession->IoCnt);
 				pckt.Clear();
 			}
-			if (!pLanServer->RecvPost(pSession))
-			{
-				pLanServer->ReleaseSession(pSession);
-				goto lb_next;
-			}
-			InterlockedDecrement((LONG*)&pSession->IoCnt);
+			bIoRet = pLanServer->RecvPost(pSession);
 		}
 		else
 		{
-#ifdef SENDRECV
-			int in_prev = pSession->sendRB.iInPos_;
-			int out_prev = pSession->sendRB.iOutPos_;
-#endif
-
 			pSession->sendRB.MoveOutPos(dwNOBT);
-
-#ifdef SENDRECV
-			int in_after = pSession->sendRB.iInPos_;
-			int out_after = pSession->sendRB.iOutPos_;
-#endif
-
-
-#ifdef SENDRECV
-			if (out_after - in_after > 0 && out_after - in_after < 1000)
-				__debugbreak();
-#endif
-
 #ifdef SENDRECV
 			LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Send Complete Session ID : %llu", GetCurrentThreadId(), pSession->ullID);
 #endif
 			InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
 
 			int iUseSize = pSession->sendRB.GetUseSize();
-			if (iUseSize <= 0)
+			do
 			{
-				goto lb_next;
-			}
+				if (iUseSize <= 0)
+					break;
 
-			if (!pLanServer->SendPost(pSession))
-			{
-				pLanServer->ReleaseSession(pSession);
-				goto lb_next;
-			}
-			InterlockedDecrement((LONG*)&(pSession->IoCnt));
+				if (!(bIoRet = pLanServer->SendPost(pSession)))
+					break;
+			} while (0);
 		}
-	lb_next:;
+	lb_next:
+		int ioCnt = InterlockedDecrement((LONG*)&pSession->IoCnt);
+		//LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, IoCnt Decre Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
+		if (ioCnt == 0)
+			pLanServer->ReleaseSession(pSession);
 	}
 }
 
@@ -215,23 +191,18 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 	while (1)
 	{
 		clientSock = accept(g_ListenSock, (SOCKADDR*)&clientAddr, &addrlen);
+
 		if (clientSock == INVALID_SOCKET)
-			continue;
+			__debugbreak();
 
 		if (!pLanServer->OnConnectionRequest())
 		{
 			closesocket(clientSock);
 			continue;
 		}
-		++pLanServer->dwAcceptTPS;
 
 		pSession = new Session;
-		pSession->sock = clientSock;
-		pSession->bSendingInProgress = FALSE;
-		pSession->ullID = g_ullID;
-		pSession->IoCnt = 0;
-		pSession->recvRB.iInPos_ = pSession->recvRB.iOutPos_ = 0;
-		pSession->sendRB.iInPos_ = pSession->sendRB.iOutPos_ = 0;
+		pSession->Init(clientSock, g_ullID);
 		CreateIoCompletionPort((HANDLE)pSession->sock, pLanServer->hcp_, (ULONG_PTR)pSession, 0);
 
 		AcquireSRWLockExclusive(&pLanServer->SessionUMapLock_);
@@ -241,13 +212,8 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 
 		// onAccept();
 		if (!pLanServer->RecvPost(pSession))
-		{
-			__debugbreak();
-			closesocket(pSession->sock);
-			delete pSession;
-		}
+			pLanServer->ReleaseSession(pSession);
 	}
-
 	return 0;
 }
 
@@ -285,15 +251,10 @@ BOOL LanServer::SendPacket(ULONGLONG ullID, Packet* pPacket)
 	ReleaseSRWLockShared(&SessionUMapLock_);
 
 	SHORT shHeader = pPacket->GetUsedDataSize();
-	//LOG_ASYNC(L"SendPacket sendRB Enqeueue Before in : %d, out : %d", pSession->sendRB.iInPos_, pSession->sendRB.iOutPos_);
 	pSession->sendRB.Enqueue((const char*)&shHeader, sizeof(shHeader));
 	pSession->sendRB.Enqueue(pPacket->GetBufferPtr(), shHeader);
-	//LOG_ASYNC(L"SendPacket sendRB Enqeueue After in : %d, out : %d", pSession->sendRB.iInPos_, pSession->sendRB.iOutPos_);
-	if(pSession->sendRB.iInPos_ == 0 && pSession->sendRB.iOutPos_ == 0)
-		__debugbreak();
 	return SendPost(pSession);
 }
-
 
 BOOL LanServer::RecvPost(Session* pSession)
 {
@@ -319,29 +280,23 @@ BOOL LanServer::RecvPost(Session* pSession)
 	{
 		dwErrCode = WSAGetLastError();
 		if (dwErrCode == WSA_IO_PENDING)
-			goto lb_release;
+			return TRUE;
 
-		InterlockedDecrement((LONG*)&(pSession->IoCnt));
 		IoCnt = InterlockedDecrement((LONG*)&(pSession->IoCnt));
+#ifdef WILL_RECV
 		LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, WSARecv Fail Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
-
-		if (IoCnt > 0)
-			goto lb_release;
-
+#endif
 		if (dwErrCode == WSAECONNRESET)
-			goto lb_disconnect;
+			return FALSE;
 
-		//logging
-	lb_disconnect:
+		LOG(L"Disconnect", ERR, TEXTFILE, L"WSARecv() Fail Client Disconnect By ErrCode : %u", dwErrCode);
 		return FALSE;
 	}
-lb_release:
 	return TRUE;
 }
 
 BOOL LanServer::SendPost(Session* pSession)
 {
-	//LOG_ASYNC(L"Appear At SendPost");
 	// 현재 값을 TRUE로 바꾼다. 원래 TRUE엿다면 반환값이 TRUE일것이며 그렇다면 현재 SEND 진행중이기 때문에 그냥 빠저나간다
 	// 이 조건문의 위치로 인하여 Out은 바뀌지 않을것임이 보장된다.
 	// 하지만 SendPost 실행주체가 Send완료통지 스레드인 경우에는 in의 위치는 SendPacket으로 인해서 바뀔수가 있다.
@@ -353,8 +308,6 @@ BOOL LanServer::SendPost(Session* pSession)
 	int iUseSize = pSession->sendRB.GetUseSize();
 	int iDirectDeqSize = pSession->sendRB.DirectDequeueSize();
 	int iBufLen = 0;
-	int iSendRet;
-	int IoCnt;
 
 	// SendPacket에서 in을 옮겨서 UseSize가 0보다 커진시점에서 Send완료통지가 도착해서 Out을 옮기고 플래그 해제 Recv완료통지 스레드가 먼저 SendPost에 도달해 플래그를 선점한경우 UseSize가 0이나온다.
 	// 여기서 flag를 다시 FALSE로 바꾸어주지 않아서 멈춤발생
@@ -366,9 +319,6 @@ BOOL LanServer::SendPost(Session* pSession)
 	
 	if (iUseSize <= iDirectDeqSize)
 	{
-		//if (iUseSize != iDirectDeqSize)
-		//	__debugbreak();
-
 		wsa[0].buf = pSession->sendRB.GetReadStartPtr();
 		wsa[0].len = iUseSize;
 		iBufLen = 1;
@@ -383,33 +333,27 @@ BOOL LanServer::SendPost(Session* pSession)
 	}
 
 	ZeroMemory(&(pSession->sendOverlapped), sizeof(WSAOVERLAPPED));
-	IoCnt = InterlockedIncrement((LONG*)&pSession->IoCnt);
+	InterlockedIncrement((LONG*)&pSession->IoCnt);
 #ifdef WILL_SEND 
-	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, SendPost WSARecv Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
+	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, SendPost WSASend Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
 #endif
-	iSendRet = WSASend(pSession->sock, wsa, iBufLen, nullptr, 0, &(pSession->sendOverlapped), nullptr);
+	int iSendRet = WSASend(pSession->sock, wsa, iBufLen, nullptr, 0, &(pSession->sendOverlapped), nullptr);
 	if (iSendRet == SOCKET_ERROR)
 	{
 		DWORD dwErrCode = WSAGetLastError();
 		if (dwErrCode == WSA_IO_PENDING)
-		{
 			return TRUE;
-		}
+
 		InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
 		InterlockedDecrement((LONG*)&(pSession->IoCnt));
-		IoCnt = InterlockedDecrement((LONG*)&(pSession->IoCnt));
+#ifdef WILL_SEND 
 		LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, WSASend Fail Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
-
-		if (IoCnt > 0)
-		{
-			return TRUE;
-		}
+#endif
 
 		if (dwErrCode == WSAECONNRESET)
-			goto lb_disconnect;
+			return FALSE;
 
-		LOG(L"Disconnect", ERR, TEXTFILE, L"WSASend() Fail Client Disconnect By ErrCode : %u", dwErrCode);
-	lb_disconnect:
+		//LOG(L"Disconnect", ERR, TEXTFILE, L"WSASend() Fail Client Disconnect By ErrCode : %u, IoCount : %d", dwErrCode, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
 		return FALSE;
 	}
 	return TRUE;

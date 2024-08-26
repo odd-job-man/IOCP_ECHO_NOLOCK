@@ -14,4 +14,5 @@ struct Session
 	WSAOVERLAPPED sendOverlapped;
 	RingBuffer recvRB;
 	RingBuffer sendRB;
+	BOOL Init(SOCKET clientSock, ULONGLONG ullClientID);
 };
