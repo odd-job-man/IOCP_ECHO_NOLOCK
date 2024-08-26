@@ -106,7 +106,6 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 	int addrlen = sizeof(clientaddr);
 	DWORD dwNOBT;
 	BOOL bGQCSRet;
-	BOOL bIoRet;
 
 	pLanServer = (LanServer*)arg;
 
@@ -124,6 +123,15 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 		if (!pOverlapped && !dwNOBT && !pSession)
 			return 0;
 
+		// 정상종료
+		if (bGQCSRet && dwNOBT == 0)
+			goto lb_next;
+
+		// 비정상 종료
+		// 로깅을 하려햇으나 GQCS 에서 WSAGetLastError 값을 64로 덮어 써버린다.
+		// 따라서 WSASend나 WSARecv, 둘 중 하나가 바로 실패하는 경우에만 로깅하는것으로...
+		if (!bGQCSRet && pOverlapped)
+			goto lb_next;
 
 		if (&pSession->recvOverlapped == pOverlapped)
 		{
@@ -147,11 +155,10 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 				pSession->recvRB.MoveOutPos(sizeof(shHeader));
 				pSession->recvRB.Dequeue(pckt.GetBufferPtr(), shHeader);
 				pckt.MoveWritePos(shHeader);
-				if (!(bIoRet = pLanServer->OnRecv(pSession->ullID, &pckt)))
-					goto lb_next;
+				pLanServer->OnRecv(pSession->ullID, &pckt);
 				pckt.Clear();
 			}
-			bIoRet = pLanServer->RecvPost(pSession);
+			pLanServer->RecvPost(pSession);
 		}
 		else
 		{
@@ -161,15 +168,8 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 #endif
 			InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
 
-			int iUseSize = pSession->sendRB.GetUseSize();
-			do
-			{
-				if (iUseSize <= 0)
-					break;
-
-				if (!(bIoRet = pLanServer->SendPost(pSession)))
-					break;
-			} while (0);
+			if (pSession->sendRB.GetUseSize() > 0)
+				pLanServer->SendPost(pSession);
 		}
 	lb_next:
 		int ioCnt = InterlockedDecrement((LONG*)&pSession->IoCnt);
@@ -210,7 +210,7 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 		ReleaseSRWLockExclusive(&pLanServer->SessionUMapLock_);
 		++g_ullID;
 
-		// onAccept();
+		// 맨처음 WSARecv 부터 실패한 경우
 		if (!pLanServer->RecvPost(pSession))
 			pLanServer->ReleaseSession(pSession);
 	}
@@ -233,17 +233,17 @@ void* LanServer::OnAccept(ULONGLONG ullID)
 	return nullptr;
 }
 
-BOOL LanServer::OnRecv(ULONGLONG ullID, Packet* pPacket)
+void LanServer::OnRecv(ULONGLONG ullID, Packet* pPacket)
 {
 	ULONGLONG ullPayLoad;
 	Packet sendPacket;
 	(*pPacket) >> ullPayLoad;
 
 	sendPacket << ullPayLoad;
-	return SendPacket(ullID, &sendPacket);
+	SendPacket(ullID, &sendPacket);
 }
 
-BOOL LanServer::SendPacket(ULONGLONG ullID, Packet* pPacket)
+void LanServer::SendPacket(ULONGLONG ullID, Packet* pPacket)
 {
 	AcquireSRWLockShared(&SessionUMapLock_);
 	auto iter = sessionUMap_.find(ullID);
@@ -253,7 +253,7 @@ BOOL LanServer::SendPacket(ULONGLONG ullID, Packet* pPacket)
 	SHORT shHeader = pPacket->GetUsedDataSize();
 	pSession->sendRB.Enqueue((const char*)&shHeader, sizeof(shHeader));
 	pSession->sendRB.Enqueue(pPacket->GetBufferPtr(), shHeader);
-	return SendPost(pSession);
+	SendPost(pSession);
 }
 
 BOOL LanServer::RecvPost(Session* pSession)
@@ -289,7 +289,7 @@ BOOL LanServer::RecvPost(Session* pSession)
 		if (dwErrCode == WSAECONNRESET)
 			return FALSE;
 
-		LOG(L"Disconnect", ERR, TEXTFILE, L"WSARecv() Fail Client Disconnect By ErrCode : %u", dwErrCode);
+		LOG(L"Disconnect", ERR, TEXTFILE, L"Client Disconnect By ErrCode : %u", dwErrCode);
 		return FALSE;
 	}
 	return TRUE;
@@ -349,11 +349,10 @@ BOOL LanServer::SendPost(Session* pSession)
 #ifdef WILL_SEND 
 		LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, WSASend Fail Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
 #endif
-
 		if (dwErrCode == WSAECONNRESET)
 			return FALSE;
 
-		//LOG(L"Disconnect", ERR, TEXTFILE, L"WSASend() Fail Client Disconnect By ErrCode : %u, IoCount : %d", dwErrCode, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
+		LOG(L"Disconnect", ERR, TEXTFILE, L"Client Disconnect By ErrCode : %u", dwErrCode);
 		return FALSE;
 	}
 	return TRUE;

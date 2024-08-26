@@ -14,10 +14,10 @@ public:
 	//virtual void Stop();
 	//virtual int GetSessionCount();
 	//virtual BOOL Disconnect(ULONGLONG ullID);
-	virtual BOOL SendPacket(ULONGLONG ullID, Packet* pPacket);
+	virtual void SendPacket(ULONGLONG ullID, Packet* pPacket);
 	virtual BOOL OnConnectionRequest();
 	virtual void* OnAccept(ULONGLONG ullID);
-	virtual BOOL OnRecv(ULONGLONG ullID, Packet* pPacket);
+	virtual void OnRecv(ULONGLONG ullID, Packet* pPacket);
 	//virtual void OnRelease(ULONGLONG ullID);
 private:
 	friend unsigned __stdcall AcceptThread(LPVOID arg);
