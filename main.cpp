@@ -8,6 +8,7 @@ int main()
 	BOOL bShutDown = FALSE;
 	ls.Start(MAX_SESSION);
 	LOG(L"SYSTEM", SYSTEM, CONSOLE, L"Server StartUp()!");
+	//LOG_ASYNC_INIT();
 	while (!bShutDown)
 	{
 		Sleep(1000);
@@ -16,6 +17,7 @@ int main()
 
 		ls.Monitoring();
 	}
+	//CLEAR_LOG_ASYNC();
 	return 0;
 
 }

@@ -5,59 +5,6 @@
 
 #pragma warning(disable : 4700)
 
-#define GetDirectEnqueueSize_MACRO(in,out,iRet) do\
-{\
-if(in >= out){\
-	if(out > 0){\
-		iRet = ACTUAL_SIZE - in;\
-	}else{\
-		iRet = BUFFER_SIZE - in;\
-}}\
-else{\
-	iRet = out - in - 1;\
-}\
-}while(0)\
-
-#define GetDirectDequeueSize_MACRO(in,out,iRet) do{\
-if(in >= out){\
-	iRet = in - out;\
-}\
-else{\
-	iRet = ACTUAL_SIZE - out;\
-}\
-}while(0)\
-
-
-#define GetUseSize_MACRO(in,out,iRet) do\
-{\
-	if(in >= out){\
-		iRet = in - out;\
-	}\
-	else{\
-		iRet = ACTUAL_SIZE - out + in;\
-	}\
-}while(0)\
-
-#define GetFreeSize_MACRO(in,out,iRet) do\
-{\
-int iUseSize;\
-GetUseSize_MACRO(in,out,iUseSize);\
-iRet = BUFFER_SIZE - iUseSize;\
-}while(0)\
-
-
-#define GetInStartPtr_MACRO(in,iRet) do{\
-iRet = (Buffer_ + in);\
-}while(0)\
-
-#define GetOutStartPtr_MACRO(out,iRet) do{\
-iRet = (Buffer_ + out);\
-}while(0)\
-
-#define MoveInOrOutPos_MACRO(iPos,iMoveSize) do{\
-iPos = (iPos + iMoveSize) % (ACTUAL_SIZE);\
-}while(0);\
-
 // 특이사항 : 원형 큐이기 때문에 할당 크기가 BUFFER_SIZE 보다 1 커야함
 #pragma warning(disable : 26495)
 RingBuffer::RingBuffer(void)
@@ -219,6 +166,39 @@ int RingBuffer::Peek(char* pOutTarget, int iSizeToPeek)
 		iFirstSize = iDirectPeekSize;
 
 	GetOutStartPtr_MACRO(out, pPeekStartPos);
+	memcpy(pOutTarget, pPeekStartPos, iFirstSize);
+
+	iSecondSize = iSizeToPeek - iFirstSize;
+	if (iSecondSize <= 0)
+		return iFirstSize;
+
+	memcpy(pOutTarget + iFirstSize, Buffer_, iSecondSize);
+	return iFirstSize + iSecondSize;
+}
+
+int RingBuffer::PeekAt(char* pOutTarget, int iOut, int iSizeToPeek)
+{
+	int iUseSize;
+	int iDirectPeekSize;
+	int iFirstSize;
+	int iSecondSize;
+	char* pPeekStartPos;
+
+	int in = iInPos_;
+	GetUseSize_MACRO(in, iOut, iUseSize);
+	if (iSizeToPeek > iUseSize)
+	{
+		// 들어있는 데이터보다 많은 데이터를 읽으려고 하면 그냥 반환한다.
+		return 0;
+	}
+
+	GetDirectDequeueSize_MACRO(in, iOut, iDirectPeekSize);
+	if (iDirectPeekSize > iSizeToPeek) // 잘려서 두번에 걸쳐서 복사
+		iFirstSize = iSizeToPeek;
+	else // 한번에 복사
+		iFirstSize = iDirectPeekSize;
+
+	GetOutStartPtr_MACRO(iOut, pPeekStartPos);
 	memcpy(pOutTarget, pPeekStartPos, iFirstSize);
 
 	iSecondSize = iSizeToPeek - iFirstSize;

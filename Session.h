@@ -27,6 +27,7 @@ struct Session
 	ID id;
 	BOOL bSendingInProgress;
 	BOOL bUsing;
+	DWORD dwSendBufNum;
 	int IoCnt;
 	WSAOVERLAPPED recvOverlapped;
 	WSAOVERLAPPED sendOverlapped;

@@ -24,7 +24,7 @@ public:
 private:
 	friend unsigned __stdcall AcceptThread(LPVOID arg);
 	friend unsigned __stdcall IOCPWorkerThread(LPVOID arg);
-	int SessionNum_ = 0;
+	DWORD dwSessionNum_ = 0;
 	DWORD dwMaxSession_;
 	Session* pSessionArr_;
 	Stack DisconnectStack_;

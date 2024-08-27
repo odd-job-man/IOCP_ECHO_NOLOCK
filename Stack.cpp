@@ -32,5 +32,6 @@ BOOL Stack::Pop(void** pOutItem)
 BOOL Stack::Clear()
 {
 	free(buf_);
+	return FALSE;
 }
 

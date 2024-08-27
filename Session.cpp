@@ -7,6 +7,7 @@ BOOL Session::Init(SOCKET clientSock, ULONGLONG ullClientID, SHORT shIdx)
     bUsing = TRUE;
     MAKE_SESSION_INDEX(id, ullClientID, shIdx);
     IoCnt = 0;
+    dwSendBufNum = 0;
     recvRB.ClearBuffer();
     sendRB.ClearBuffer();
 #ifdef IO_RET
