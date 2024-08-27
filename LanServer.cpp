@@ -299,10 +299,9 @@ void LanServer::Monitoring()
 
 void LanServer::SendPacket(ID id, Packet* pPacket)
 {
-	Session* pSession = &pSessionArr_[id.sh[3]];
-	SHORT shHeader = pPacket->GetUsedDataSize();
-	pSession->sendRB.Enqueue((const char*)&shHeader, sizeof(shHeader));
-	pSession->sendRB.Enqueue(pPacket->GetBufferPtr(), shHeader);
+	Session* pSession = &pSessionArr_[GET_SESSION_INDEX(id)];
+	*(NET_HEADER*)pPacket->pBuffer_ = pPacket->GetUsedDataSize();
+	pSession->sendRB.Enqueue(pPacket->pBuffer_, pPacket->GetNetUseSize());
 	SendPost(pSession);
 }
 

@@ -1,5 +1,7 @@
 #pragma once
 #include <memory.h>
+
+typedef short NET_HEADER;
 class Packet
 {
 public:
@@ -8,18 +10,23 @@ public:
 		RINGBUFFER_SIZE = 10000
 	};
 
+	enum NET_HEADER_SIZE
+	{
+		NET_HEADER_SIZE = sizeof(short)
+	};
+
 	enum PACKET_SIZE
 	{
-		DEFAULT_SIZE = RINGBUFFER_SIZE / 8
+		DEFAULT_SIZE = (RINGBUFFER_SIZE / 8 + NET_HEADER_SIZE)
 	};
 
 	Packet()
-		:front_{ 0 }, rear_{ 0 }
+		:front_{ NET_HEADER_SIZE }, rear_{ NET_HEADER_SIZE }
 	{}
 
 	void Clear(void)
 	{
-		front_ = rear_ = 0;
+		front_ = rear_ = NET_HEADER_SIZE;
 	}
 
 	int GetData(char* pDest, int sizeToGet)
@@ -50,7 +57,7 @@ public:
 
 	char* GetBufferPtr(void)
 	{
-		return pBuffer_;
+		return pBuffer_ + NET_HEADER_SIZE;
 	}
 
 	int MoveWritePos(int sizeToWrite)
@@ -65,9 +72,6 @@ public:
 		return sizeToRead;
 	}
 
-	char pBuffer_[DEFAULT_SIZE];
-	int front_ = 0;
-	int rear_ = 0;
 
 	Packet& operator <<(const unsigned char value)
 	{
@@ -187,7 +191,7 @@ public:
 		front_ += sizeof(value);
 		return *this;
 	}
-	//
+
 	Packet& operator <<(const unsigned __int64 value)
 	{
 		*(unsigned __int64*)(pBuffer_ + rear_) = value;
@@ -227,4 +231,14 @@ public:
 		front_ += sizeof(value);
 		return *this;
 	}
+	private:
+	friend class LanServer;
+	friend unsigned __stdcall IOCPWorkerThread(LPVOID arg);
+	int GetNetUseSize()
+	{
+		return rear_ - front_ + NET_HEADER_SIZE;
+	}
+	char pBuffer_[DEFAULT_SIZE];
+	int front_ = NET_HEADER_SIZE;
+	int rear_ = NET_HEADER_SIZE;
 };

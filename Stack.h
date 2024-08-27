@@ -9,7 +9,7 @@ public:
 	DWORD dwElementSize_;
 
 	BOOL Init(DWORD dwElementNum, DWORD dwElementSize);
-	BOOL Push(void** ppItem);
+	BOOL Push(void** pItem);
 	BOOL Pop(void** pOutItem);
 	BOOL Clear();
 
