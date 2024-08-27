@@ -143,6 +143,17 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	return 0;
 }
 
+__forceinline void ClearPacket(Session* pSession)
+{
+	DWORD dwSendBufNum = _InterlockedExchange((LONG*)&pSession->dwSendBufNum, 0);
+	for (DWORD i = 0; i < dwSendBufNum; ++i)
+	{
+		Packet* pPacket;
+		pSession->sendRB.Dequeue((char*)&pPacket, sizeof(Packet*));
+		delete pPacket;
+	}
+}
+
 unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 {
 	LanServer* pLanServer = (LanServer*)arg;
@@ -160,13 +171,13 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 		if (!pOverlapped && !dwNOBT && !pSession)
 			return 0;
 
-		// 정상종료
+		 //정상종료
 		if (bGQCSRet && dwNOBT == 0)
 			goto lb_next;
 
-		// 비정상 종료
-		// 로깅을 하려햇으나 GQCS 에서 WSAGetLastError 값을 64로 덮어 써버린다.
-		// 따라서 WSASend나 WSARecv, 둘 중 하나가 바로 실패하는 경우에만 로깅하는것으로...
+		 //비정상 종료
+		 //로깅을 하려햇으나 GQCS 에서 WSAGetLastError 값을 64로 덮어 써버린다.
+		 //따라서 WSASend나 WSARecv, 둘 중 하나가 바로 실패하는 경우에만 로깅하는것으로...
 		if (!bGQCSRet && pOverlapped)
 			goto lb_next;
 
@@ -205,14 +216,8 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 			ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
 			LOG_ASYNC(L"Session ID : %llu, Send Amount : %u", pSession->id.ullId, dwNOBT);
 #endif
-			DWORD dwSendBufNum = _InterlockedExchange((LONG*)&pSession->dwSendBufNum, 0);
-			for (DWORD i = 0; i < dwSendBufNum; ++i)
-			{
-				Packet* pPacket;
-				pSession->sendRB.Dequeue((char*)&pPacket, sizeof(Packet*));
-				delete pPacket;
-			}
-#ifdef SENDRECV
+			ClearPacket(pSession);
+		#ifdef SENDRECV
 			LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Send Complete Session ID : %llu", GetCurrentThreadId(), pSession->id.ullId);
 #endif
 			InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
@@ -222,7 +227,10 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 		}
 	lb_next:
 		if (InterlockedDecrement((LONG*)&pSession->IoCnt) == 0)
+		{
+			ClearPacket(pSession);
 			pLanServer->ReleaseSession(pSession);
+		}
 	}
 }
 
@@ -252,6 +260,7 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 		}
 
 		InterlockedIncrement((LONG*)&pLanServer->dwAcceptTPS_);
+		InterlockedIncrement((LONG*)&pLanServer->dwSessionNum_);
 
 		SHORT shIndex;
 		EnterCriticalSection(&pLanServer->stackLock_);
@@ -359,9 +368,6 @@ BOOL LanServer::SendPost(Session* pSession)
 	if (InterlockedExchange((LONG*)&pSession->bSendingInProgress, TRUE) == TRUE)
 		return TRUE;
 
-	//int iDirectDeqSize = pSession->sendRB.DirectDequeueSize();
-	//int iBufLen = 0;
-
 	// SendPacket에서 in을 옮겨서 UseSize가 0보다 커진시점에서 Send완료통지가 도착해서 Out을 옮기고 플래그 해제 Recv완료통지 스레드가 먼저 SendPost에 도달해 플래그를 선점한경우 UseSize가 0이나온다.
 	// 여기서 flag를 다시 FALSE로 바꾸어주지 않아서 멈춤발생
 	int out = pSession->sendRB.iOutPos_;
@@ -378,7 +384,7 @@ BOOL LanServer::SendPost(Session* pSession)
 	WSABUF wsa[50];
 	DWORD i;
 	DWORD dwBufferNum = iUseSize / sizeof(Packet*);
-	for (i = 0; i < _countof(wsa) && i < dwBufferNum; ++i)
+	for (i = 0; i < 50 && i < dwBufferNum; ++i)
 	{
 		Packet* pPacket;
 		pSession->sendRB.PeekAt((char*)&pPacket, out, sizeof(Packet*));
@@ -428,5 +434,6 @@ void LanServer::ReleaseSession(Session* pSession)
 	DisconnectStack_.Push((void**)&shIndex);
 	LeaveCriticalSection(&stackLock_);
 	InterlockedIncrement((LONG*)&dwDisconnectTPS_);
+	InterlockedDecrement((LONG*)&dwSessionNum_);
 }
 
