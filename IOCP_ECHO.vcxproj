@@ -120,6 +120,7 @@
       <ConformanceMode>true</ConformanceMode>
       <BrowseInformation>true</BrowseInformation>
       <Optimization>Disabled</Optimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

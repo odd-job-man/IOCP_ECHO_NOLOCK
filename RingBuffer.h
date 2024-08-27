@@ -1,6 +1,6 @@
 #pragma once
 
-constexpr int BUFFER_SIZE = 10000;
+constexpr int BUFFER_SIZE = 3000;
 constexpr int ACTUAL_SIZE = BUFFER_SIZE + 1;
 
 class RingBuffer

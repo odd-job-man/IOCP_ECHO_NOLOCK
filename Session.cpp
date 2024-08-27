@@ -1,10 +1,11 @@
 #include "Session.h"
 
-BOOL Session::Init(SOCKET clientSock, ULONGLONG ullClientID)
+BOOL Session::Init(SOCKET clientSock, ULONGLONG ullClientID, SHORT shIdx)
 {
     sock = clientSock;
     bSendingInProgress = FALSE;
-    ullID = ullClientID;
+    id.ullId = ullClientID;
+    id.sh[3] = shIdx;
     IoCnt = 0;
     recvRB.ClearBuffer();
     sendRB.ClearBuffer();

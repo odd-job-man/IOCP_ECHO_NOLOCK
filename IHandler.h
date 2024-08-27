@@ -11,10 +11,10 @@ public:
 	//virtual void Stop() = 0;
 	//virtual int GetSessionCount() = 0;
 	//virtual BOOL Disconnect(ULONGLONG ullID) = 0;
-	virtual void SendPacket(ULONGLONG ullID, Packet* pPacket) = 0;
+	virtual void SendPacket(ID id, Packet* pPacket) = 0;
 	virtual BOOL OnConnectionRequest() = 0;
-	virtual void* OnAccept(ULONGLONG ullID) = 0;
-	virtual void OnRecv(ULONGLONG ullID, Packet* pPacket) = 0;
+	virtual void* OnAccept(ID id) = 0;
+	virtual void OnRecv(ID id, Packet* pPacket) = 0;
 	//virtual void OnRelease(ULONGLONG ullID) = 0;
 private:
 	virtual BOOL SendPost(Session* pSession) = 0;

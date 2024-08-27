@@ -49,7 +49,7 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	hcp_ = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
 	if (!hcp_)
 	{
-		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"CreateIoCompletionPort Fail ErrCode : %u",WSAGetLastError());
+		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"CreateIoCompletionPort Fail ErrCode : %u", WSAGetLastError());
 		__debugbreak();
 	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"Create IOCP OK!");
@@ -68,17 +68,6 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE AccpetThread OK!");
 
-	for (DWORD i = 0; i < si.dwNumberOfProcessors; ++i)
-	{
-		hIOCPWorkerThread = (HANDLE)_beginthreadex(NULL, 0, IOCPWorkerThread, this, 0, nullptr);
-		if (!hIOCPWorkerThread)
-		{
-			LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE WorkerThread Fail ErrCode : %u", WSAGetLastError());
-			__debugbreak();
-		}
-		CloseHandle(hIOCPWorkerThread);
-	}
-	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE IOCP WorkerThread OK Num : %u!", si.dwNumberOfProcessors);
 
 	g_ListenSock = socket(AF_INET, SOCK_STREAM, 0);
 	if (g_ListenSock == INVALID_SOCKET)
@@ -115,7 +104,7 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	linger linger;
 	linger.l_linger = 0;
 	linger.l_onoff = 1;
-	setsockopt(g_ListenSock, IPPROTO_TCP, SO_LINGER, (char*)&linger, sizeof(linger));
+	setsockopt(g_ListenSock, SOL_SOCKET, SO_LINGER, (char*)&linger, sizeof(linger));
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"linger() OK");
 #endif
 
@@ -132,7 +121,25 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 		DisconnectStack_.Push((void**)&i);
 	InitializeCriticalSection(&stackLock_);
 
-	ResumeThread(hAcceptThread);
+	hAcceptThread = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, 0, nullptr);
+	if (!hAcceptThread)
+	{
+		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE AccpetThread Fail ErrCode : %u", WSAGetLastError());
+		__debugbreak();
+	}
+	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE AccpetThread OK!");
+
+	for (DWORD i = 0; i < si.dwNumberOfProcessors * 2; ++i)
+	{
+		hIOCPWorkerThread = (HANDLE)_beginthreadex(NULL, 0, IOCPWorkerThread, this, 0, nullptr);
+		if (!hIOCPWorkerThread)
+		{
+			LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE WorkerThread Fail ErrCode : %u", WSAGetLastError());
+			__debugbreak();
+		}
+		CloseHandle(hIOCPWorkerThread);
+	}
+	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE IOCP WorkerThread OK Num : %u!", si.dwNumberOfProcessors);
 	return 0;
 }
 
@@ -170,12 +177,10 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 #endif
 			SHORT shHeader;
 			Packet pckt;
-
 #ifdef IO_RET
 			ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
-			LOG_ASYNC(L"Recv Amount : %llu -> %llu", ret - dwNOBT, ret);
+			LOG_ASYNC(L"Session ID : %llu, Recv Amount : %u", pSession->id.ullId, dwNOBT);
 #endif
-
 			pSession->recvRB.MoveInPos(dwNOBT);
 			while (1)
 			{
@@ -185,11 +190,12 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 				if (pSession->recvRB.GetUseSize() < sizeof(shHeader) + shHeader)
 					break;
 
-				pSession->recvRB.MoveOutPos(sizeof(shHeader));
-				pSession->recvRB.Dequeue(pckt.GetBufferPtr(), shHeader);
-				pckt.MoveWritePos(shHeader);
-				pLanServer->OnRecv(pSession->ullID, &pckt);
+				pSession->recvRB.Dequeue(pckt.GetBufferPtr(), sizeof(shHeader) + shHeader);
+				pckt.MoveWritePos(sizeof(shHeader) + shHeader);
+				pckt.MoveReadPos(sizeof(shHeader));
+				pLanServer->OnRecv(pSession->id, &pckt);
 				pckt.Clear();
+				++pLanServer->dwRecvTPS_;
 			}
 			pLanServer->RecvPost(pSession);
 		}
@@ -197,7 +203,7 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 		{
 #ifdef IO_RET
 			ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
-			LOG_ASYNC(L"ID : %llu, Send Amount : %llu -> %llu", ret - dwNOBT, ret);
+			LOG_ASYNC(L"Session ID : %llu, Send Amount : %u", pSession->id.ullId, dwNOBT);
 #endif
 			pSession->sendRB.MoveOutPos(dwNOBT);
 #ifdef SENDRECV
@@ -239,12 +245,14 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 			continue;
 		}
 
+		++pLanServer->dwAcceptTPS_;
+
 		DWORD dwIndex;
 		EnterCriticalSection(&pLanServer->stackLock_);
 		pLanServer->DisconnectStack_.Pop((void**)&dwIndex);
 		LeaveCriticalSection(&pLanServer->stackLock_);
 		Session* pSession = pLanServer->pSessionArr_ + dwIndex;
-		pSession->Init(clientSock, g_ullID);
+		pSession->Init(clientSock, g_ullID, dwIndex);
 		CreateIoCompletionPort((HANDLE)pSession->sock, pLanServer->hcp_, (ULONG_PTR)pSession, 0);
 		++g_ullID;
 
@@ -264,50 +272,42 @@ BOOL LanServer::OnConnectionRequest()
 	return TRUE;
 }
 
-void* LanServer::OnAccept(ULONGLONG ullID)
+void* LanServer::OnAccept(ID id)
 {
 	return nullptr;
 }
 
-void LanServer::OnRecv(ULONGLONG ullID, Packet* pPacket)
+void LanServer::OnRecv(ID id, Packet* pPacket)
 {
 	ULONGLONG ullPayLoad;
 	Packet sendPacket;
 	(*pPacket) >> ullPayLoad;
 
 	sendPacket << ullPayLoad;
-	SendPacket(ullID, &sendPacket);
+	SendPacket(id, &sendPacket);
 }
 
-void LanServer::SendPacket(ULONGLONG ullID, Packet* pPacket)
+void LanServer::Monitoring()
 {
-	Session* pSession = nullptr;
-	for (DWORD i = 0; i < dwMaxSession_; ++i)
-	{
-		if (pSessionArr_[i].ullID == ullID)
-		{
-			pSession = pSessionArr_ + i;
-			break;
-		}
-	}
+	printf(
+		"Accept TPS: %d\n"
+		"Disconnect TPS: %d\n"
+		"Recv Msg TPS: %d\n"
+		"Send Msg TPS: %d\n\n", dwAcceptTPS_, dwDisconnectTPS_, dwRecvTPS_, dwSendTPS_);
+	dwAcceptTPS_ = dwDisconnectTPS_ = dwRecvTPS_ = dwSendTPS_ = 0;
+}
 
-	if (!pSession)
-		__debugbreak();
-
+void LanServer::SendPacket(ID id, Packet* pPacket)
+{
+	Session* pSession = &pSessionArr_[id.sh[3]];
 	SHORT shHeader = pPacket->GetUsedDataSize();
-	//int in_prev = pSession->sendRB.iInPos_;
-	//int out_prev = pSession->sendRB.iOutPos_;
 	pSession->sendRB.Enqueue((const char*)&shHeader, sizeof(shHeader));
 	pSession->sendRB.Enqueue(pPacket->GetBufferPtr(), shHeader);
-	//int in_after = pSession->sendRB.iInPos_;
-	//int out_after = pSession->sendRB.iOutPos_;
-	//LOG_ASYNC(L"SendPacket in : %d -> %d, out : %d -> %d", in_prev, in_after, out_prev, out_after);
 	SendPost(pSession);
 }
 
 BOOL LanServer::RecvPost(Session* pSession)
 {
-	int IoCnt;
 	DWORD flags;
 	int iRecvRet;
 	DWORD dwErrCode;
@@ -324,6 +324,7 @@ BOOL LanServer::RecvPost(Session* pSession)
 #ifdef WILL_RECV
 	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, RecvPost WSARecv Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
 #endif
+	//LOG_ASYNC(L"RecvPost Session ID : %u, len : %d, %d", pSession->id.ullId, wsa[0].len, wsa[1].len);
 	iRecvRet = WSARecv(pSession->sock, wsa, 2, nullptr, &flags, &(pSession->recvOverlapped), nullptr);
 	if (iRecvRet == SOCKET_ERROR)
 	{
@@ -331,14 +332,14 @@ BOOL LanServer::RecvPost(Session* pSession)
 		if (dwErrCode == WSA_IO_PENDING)
 			return TRUE;
 
-		IoCnt = InterlockedDecrement((LONG*)&(pSession->IoCnt));
+		InterlockedDecrement((LONG*)&(pSession->IoCnt));
 #ifdef WILL_RECV
 		LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, WSARecv Fail Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->ullID, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
 #endif
 		if (dwErrCode == WSAECONNRESET)
 			return FALSE;
 
-		LOG(L"Disconnect", ERR, TEXTFILE, L"Client Disconnect By ErrCode : %u", dwErrCode);
+		//LOG(L"Disconnect", ERR, TEXTFILE, L"Client Disconnect By ErrCode : %u", dwErrCode);
 		return FALSE;
 	}
 	return TRUE;
@@ -355,8 +356,6 @@ BOOL LanServer::SendPost(Session* pSession)
 
 	WSABUF wsa[2];
 	int iUseSize = pSession->sendRB.GetUseSize();
-	if (iUseSize > 7000)
-		__debugbreak();
 	int iDirectDeqSize = pSession->sendRB.DirectDequeueSize();
 	int iBufLen = 0;
 
@@ -379,9 +378,11 @@ BOOL LanServer::SendPost(Session* pSession)
 		wsa[0].buf = pSession->sendRB.GetReadStartPtr();
 		wsa[0].len = iDirectDeqSize;
 		wsa[1].buf = pSession->sendRB.Buffer_;
-		wsa[1].len = iUseSize - wsa[0].len;
+		wsa[1].len = pSession->sendRB.GetUseSize() - wsa[0].len;
 		iBufLen = 2;
 	}
+
+	dwSendTPS_ += (iUseSize / 10);
 
 	ZeroMemory(&(pSession->sendOverlapped), sizeof(WSAOVERLAPPED));
 	InterlockedIncrement((LONG*)&pSession->IoCnt);
@@ -416,8 +417,10 @@ void LanServer::ReleaseSession(Session* pSession)
 #endif
 	closesocket(pSession->sock);
 	DWORD dwIndex = pSession - pSessionArr_;
+
 	EnterCriticalSection(&stackLock_);
 	DisconnectStack_.Push((void**)&dwIndex);
 	LeaveCriticalSection(&stackLock_);
+	++dwDisconnectTPS_;
 }
 
