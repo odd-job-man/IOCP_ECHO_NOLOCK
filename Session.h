@@ -19,6 +19,7 @@ struct Session
 	SOCKET sock;
 	ID id;
 	BOOL bSendingInProgress;
+	BOOL bUsing;
 	int IoCnt;
 	WSAOVERLAPPED recvOverlapped;
 	WSAOVERLAPPED sendOverlapped;
