@@ -27,8 +27,8 @@ struct Session
 	ID id;
 	BOOL bSendingInProgress;
 	BOOL bUsing;
-	DWORD dwSendBufNum;
-	int IoCnt;
+	LONG lSendBufNum;
+	LONG IoCnt;
 	WSAOVERLAPPED recvOverlapped;
 	WSAOVERLAPPED sendOverlapped;
 	RingBuffer recvRB;

@@ -24,8 +24,8 @@ public:
 private:
 	friend unsigned __stdcall AcceptThread(LPVOID arg);
 	friend unsigned __stdcall IOCPWorkerThread(LPVOID arg);
-	DWORD dwSessionNum_ = 0;
-	DWORD dwMaxSession_;
+	LONG lSessionNum_ = 0;
+	LONG lMaxSession_;
 	Session* pSessionArr_;
 	Stack DisconnectStack_;
 	CRITICAL_SECTION stackLock_;
@@ -33,18 +33,19 @@ private:
 	virtual BOOL RecvPost(Session* pSession);
 	virtual BOOL SendPost(Session* pSession);
 	virtual void ReleaseSession(Session* pSession);
+	void RecvProc(Session* pSession, DWORD dwNumberOfBytesTransferred);
+	void SendProc(Session* pSession, DWORD dwNumberOfBytesTransferred);
 
 	// Monitoring º¯¼ö
 	// Accept
-	DWORD dwAcceptTPS_ = 0;
+	LONG lAcceptTPS_ = 0;
 
 	// Recv (Per MSG)
-	DWORD dwRecvTPS_ = 0;
+	LONG lRecvTPS_ = 0;
 
 	// Send (Per MSG)
-	DWORD dwSendTPS_ = 0;
+	LONG lSendTPS_ = 0;
 
 	// Disconnect
-	DWORD dwDisconnectTPS_ = 0;
-
+	LONG lDisconnectTPS_ = 0;
 };

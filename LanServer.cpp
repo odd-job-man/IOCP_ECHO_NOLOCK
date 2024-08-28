@@ -5,6 +5,7 @@
 
 #include "Logger.h"
 #include <iostream>
+#include <crtdbg.h>
 
 
 
@@ -22,7 +23,6 @@ int g_iCount = 0;
 ULONGLONG g_recv = 0;
 ULONGLONG g_send = 0;
 
-
 unsigned __stdcall IOCPWorkerThread(LPVOID arg);
 unsigned __stdcall AcceptThread(LPVOID arg);
 
@@ -35,8 +35,16 @@ ULONGLONG g_ullID;
 
 SOCKET g_ListenSock;
 
+
+#define RECV_COMPL 1000
+#define SEND_COMPL 1001
+
 BOOL LanServer::Start(DWORD dwMaxSession)
 {
+	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
+	_CrtSetReportFile(_CRT_WARN, GetStdHandle(STD_OUTPUT_HANDLE));
+
 	int retval;
 	WSADATA wsa;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
@@ -115,7 +123,7 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 #endif
 
 	pSessionArr_ = new Session[dwMaxSession];
-	dwMaxSession_ = dwMaxSession;
+	lMaxSession_ = dwMaxSession;
 	DisconnectStack_.Init(dwMaxSession, sizeof(SHORT));
 	for (int i = dwMaxSession - 1; i >= 0; --i)
 		DisconnectStack_.Push((void**)&i);
@@ -145,7 +153,18 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 
 __forceinline void ClearPacket(Session* pSession)
 {
-	DWORD dwSendBufNum = _InterlockedExchange((LONG*)&pSession->dwSendBufNum, 0);
+	DWORD dwSendBufNum = _InterlockedExchange(&pSession->lSendBufNum, 0);
+	for (DWORD i = 0; i < dwSendBufNum; ++i)
+	{
+		Packet* pPacket;
+		pSession->sendRB.Dequeue((char*)&pPacket, sizeof(Packet*));
+		delete pPacket;
+	}
+}
+
+__forceinline void ReleaseSendFailPacket(Session* pSession)
+{
+	DWORD dwSendBufNum = pSession->sendRB.GetUseSize() / sizeof(Packet*);
 	for (DWORD i = 0; i < dwSendBufNum; ++i)
 	{
 		Packet* pPacket;
@@ -167,70 +186,30 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 #ifdef GQCSRET
 		LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, GQCS return Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->id.ullId, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
 #endif
-
-		if (!pOverlapped && !dwNOBT && !pSession)
-			return 0;
-
-		 //정상종료
-		if (bGQCSRet && dwNOBT == 0)
-			goto lb_next;
-
-		 //비정상 종료
-		 //로깅을 하려햇으나 GQCS 에서 WSAGetLastError 값을 64로 덮어 써버린다.
-		 //따라서 WSASend나 WSARecv, 둘 중 하나가 바로 실패하는 경우에만 로깅하는것으로...
-		if (!bGQCSRet && pOverlapped)
-			goto lb_next;
-
-		if (&pSession->recvOverlapped == pOverlapped)
+		do
 		{
-#ifdef SENDRECV
-			LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Recv Complete Session ID : %llu", GetCurrentThreadId(), pSession->id.ullId);
-#endif
-			SHORT shHeader;
-			Packet pckt;
-#ifdef IO_RET
-			ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
-			LOG_ASYNC(L"Session ID : %llu, Recv Amount : %u", pSession->id.ullId, dwNOBT);
-#endif
-			pSession->recvRB.MoveInPos(dwNOBT);
-			while (1)
-			{
-				if (pSession->recvRB.Peek((char*)&shHeader, sizeof(shHeader)) == 0)
-					break;
+			if (!pOverlapped && !dwNOBT && !pSession)
+				return 0;
 
-				if (pSession->recvRB.GetUseSize() < sizeof(shHeader) + shHeader)
-					break;
+			//정상종료
+			if (bGQCSRet && dwNOBT == 0)
+				break;
 
-				pSession->recvRB.Dequeue(pckt.GetBufferPtr(), sizeof(shHeader) + shHeader);
-				pckt.MoveWritePos(sizeof(shHeader) + shHeader);
-				pckt.MoveReadPos(sizeof(shHeader));
-				pLanServer->OnRecv(pSession->id, &pckt);
-				pckt.Clear();
-				InterlockedIncrement((LONG*)&pLanServer->dwRecvTPS_);
-			}
-			pLanServer->RecvPost(pSession);
-		}
-		else
-		{
-#ifdef IO_RET
-			ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
-			LOG_ASYNC(L"Session ID : %llu, Send Amount : %u", pSession->id.ullId, dwNOBT);
-#endif
-			ClearPacket(pSession);
-		#ifdef SENDRECV
-			LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Send Complete Session ID : %llu", GetCurrentThreadId(), pSession->id.ullId);
-#endif
-			InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
+			//비정상 종료
+			//로깅을 하려햇으나 GQCS 에서 WSAGetLastError 값을 64로 덮어 써버린다.
+			//따라서 WSASend나 WSARecv, 둘 중 하나가 바로 실패하는 경우에만 로깅하는것으로...
+			if (!bGQCSRet && pOverlapped)
+				break;
 
-			if (pSession->sendRB.GetUseSize() > 0)
-				pLanServer->SendPost(pSession);
-		}
-	lb_next:
-		if (InterlockedDecrement((LONG*)&pSession->IoCnt) == 0)
-		{
-			ClearPacket(pSession);
+			if (&pSession->recvOverlapped == pOverlapped)
+				pLanServer->RecvProc(pSession, dwNOBT);
+			else
+				pLanServer->SendProc(pSession, dwNOBT);
+
+		} while (0);
+
+		if (InterlockedDecrement(&pSession->IoCnt) == 0)
 			pLanServer->ReleaseSession(pSession);
-		}
 	}
 }
 
@@ -259,8 +238,8 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 			continue;
 		}
 
-		InterlockedIncrement((LONG*)&pLanServer->dwAcceptTPS_);
-		InterlockedIncrement((LONG*)&pLanServer->dwSessionNum_);
+		InterlockedIncrement((LONG*)&pLanServer->lAcceptTPS_);
+		InterlockedIncrement((LONG*)&pLanServer->lSessionNum_);
 
 		SHORT shIndex;
 		EnterCriticalSection(&pLanServer->stackLock_);
@@ -271,17 +250,15 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 		CreateIoCompletionPort((HANDLE)pSession->sock, pLanServer->hcp_, (ULONG_PTR)pSession, 0);
 		++g_ullID;
 
-		// 맨처음 WSARecv 부터 실패한 경우
 		if (!pLanServer->RecvPost(pSession))
 			pLanServer->ReleaseSession(pSession);
 	}
 	return 0;
 }
 
-
 BOOL LanServer::OnConnectionRequest()
 {
-	if (dwSessionNum_ + 1 >= dwMaxSession_)
+	if (lSessionNum_ + 1 >= lMaxSession_)
 		return FALSE;
 
 	return TRUE;
@@ -309,8 +286,16 @@ void LanServer::Monitoring()
 		"Accept TPS: %d\n"
 		"Disconnect TPS: %d\n"
 		"Recv Msg TPS: %d\n"
-		"Send Msg TPS: %d\n\n", dwAcceptTPS_, dwDisconnectTPS_, dwRecvTPS_, dwSendTPS_);
-	dwAcceptTPS_ = dwDisconnectTPS_ = dwRecvTPS_ = dwSendTPS_ = 0;
+		"Send Msg TPS: %d\n"
+		"User Num : %d\n\n",
+		lAcceptTPS_, lDisconnectTPS_, lRecvTPS_, lSendTPS_, lSessionNum_);
+
+#ifdef _DEBUG
+	if (!lSessionNum_)
+		_CrtDumpMemoryLeaks();
+#endif
+
+	lAcceptTPS_ = lDisconnectTPS_ = lRecvTPS_ = lSendTPS_ = 0;
 }
 
 void LanServer::SendPacket(ID id, Packet* pPacket)
@@ -335,7 +320,7 @@ BOOL LanServer::RecvPost(Session* pSession)
 
 	ZeroMemory(&pSession->recvOverlapped, sizeof(WSAOVERLAPPED));
 	flags = 0;
-	InterlockedIncrement((LONG*)&(pSession->IoCnt));
+	InterlockedIncrement(&pSession->IoCnt);
 #ifdef WILL_RECV
 	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, RecvPost WSARecv Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->id.ullId, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
 #endif
@@ -346,7 +331,7 @@ BOOL LanServer::RecvPost(Session* pSession)
 		if (dwErrCode == WSA_IO_PENDING)
 			return TRUE;
 
-		InterlockedDecrement((LONG*)&(pSession->IoCnt));
+		InterlockedDecrement(&(pSession->IoCnt));
 #ifdef WILL_RECV
 		LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, WSARecv Fail Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->id.ullId, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
 #endif
@@ -393,9 +378,9 @@ BOOL LanServer::SendPost(Session* pSession)
 		MoveInOrOutPos_MACRO(out, sizeof(Packet*));
 	}
 
-	InterlockedExchange((LONG*)&pSession->dwSendBufNum, i);
-	InterlockedAdd((LONG*)&dwSendTPS_, i);
-	InterlockedIncrement((LONG*)&pSession->IoCnt);
+	InterlockedExchange(&pSession->lSendBufNum, i);
+	InterlockedAdd(&lSendTPS_, i);
+	InterlockedIncrement(&pSession->IoCnt);
 	ZeroMemory(&(pSession->sendOverlapped), sizeof(WSAOVERLAPPED));
 #ifdef WILL_SEND 
 	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, SendPost WSASend Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->id.ullId, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
@@ -408,7 +393,7 @@ BOOL LanServer::SendPost(Session* pSession)
 			return TRUE;
 
 		InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
-		InterlockedDecrement((LONG*)&(pSession->IoCnt));
+		InterlockedDecrement(&(pSession->IoCnt));
 #ifdef WILL_SEND 
 		LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, WSASend Fail Session ID : %llu, IoCount : %d", GetCurrentThreadId(), pSession->id.ullId, InterlockedExchange((LONG*)&pSession->IoCnt, pSession->IoCnt));
 #endif
@@ -426,14 +411,68 @@ void LanServer::ReleaseSession(Session* pSession)
 #ifdef SESSION_DELETE 
 	LOG_ASYNC(L"Delete Session : %llu", pSession->id.ullId);
 #endif
+	ReleaseSendFailPacket(pSession);
 	closesocket(pSession->sock);
 	pSession->bUsing = FALSE;
 	SHORT shIndex = (SHORT)(pSession - pSessionArr_);
+	if (pSession->sendRB.GetUseSize() > 0)
+		__debugbreak();
 
+#ifdef _DEBUG
+	_ASSERTE(_CrtCheckMemory());
+#endif
 	EnterCriticalSection(&stackLock_);
 	DisconnectStack_.Push((void**)&shIndex);
 	LeaveCriticalSection(&stackLock_);
-	InterlockedIncrement((LONG*)&dwDisconnectTPS_);
-	InterlockedDecrement((LONG*)&dwSessionNum_);
+	InterlockedIncrement(&lDisconnectTPS_);
+	InterlockedDecrement(&lSessionNum_);
 }
+
+void LanServer::RecvProc(Session* pSession, DWORD dwNumberOfByteTransferred)
+{
+#ifdef SENDRECV
+	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Recv Complete Session ID : %llu", GetCurrentThreadId(), pSession->id.ullId);
+#endif
+	SHORT shHeader;
+	Packet packet;
+#ifdef IO_RET
+	ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
+	LOG_ASYNC(L"Session ID : %llu, Recv Amount : %u", pSession->id.ullId, dwNOBT);
+#endif
+	pSession->recvRB.MoveInPos(dwNumberOfByteTransferred);
+	while (1)
+	{
+		if (pSession->recvRB.Peek((char*)&shHeader, sizeof(shHeader)) == 0)
+			break;
+
+		if (pSession->recvRB.GetUseSize() < sizeof(shHeader) + shHeader)
+			break;
+
+		pSession->recvRB.Dequeue(packet.GetBufferPtr(), sizeof(shHeader) + shHeader);
+		packet.MoveWritePos(sizeof(shHeader) + shHeader);
+		packet.MoveReadPos(sizeof(shHeader));
+		OnRecv(pSession->id, &packet);
+		packet.Clear();
+		InterlockedIncrement(&lRecvTPS_);
+	}
+	RecvPost(pSession);
+}
+
+void LanServer::SendProc(Session* pSession, DWORD dwNumberOfBytesTransferred)
+{
+#ifdef IO_RET
+	ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
+	LOG_ASYNC(L"Session ID : %llu, Send Amount : %u", pSession->id.ullId, dwNOBT);
+#endif
+	ClearPacket(pSession);
+#ifdef SENDRECV
+	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Send Complete Session ID : %llu", GetCurrentThreadId(), pSession->id.ullId);
+#endif
+	InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
+
+	if (pSession->sendRB.GetUseSize() > 0)
+		SendPost(pSession);
+}
+
+
 
