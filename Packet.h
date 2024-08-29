@@ -234,6 +234,7 @@ public:
 	private:
 	friend class LanServer;
 	friend unsigned __stdcall IOCPWorkerThread(LPVOID arg);
+	friend unsigned __stdcall AcceptThread(LPVOID arg);
 	int GetNetUseSize()
 	{
 		return rear_ - front_ + NET_HEADER_SIZE;
