@@ -2,18 +2,21 @@
 #include "LanServer.h"
 #include "Packet.h"
 #include <process.h>
+
 #include "Logger.h"
 #include <iostream>
 #include <crtdbg.h>
 
+
+
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"LoggerMt.lib")
 
-#define GQCSRET
-#define SENDRECV
-#define WILL_SEND
-#define WILL_RECV
-#define SESSION_DELETE
+//#define GQCSRET
+//#define SENDRECV
+//#define WILL_SEND
+//#define WILL_RECV
+//#define SESSION_DELETE
 
 int g_iCount = 0;
 
@@ -25,7 +28,6 @@ unsigned __stdcall AcceptThread(LPVOID arg);
 
 ULONGLONG g_ullID;
 
-#define ACCEPT
 #define SERVERPORT 6000
 
 #define ZERO_BYTE_SEND
@@ -33,8 +35,11 @@ ULONGLONG g_ullID;
 
 SOCKET g_ListenSock;
 
+
 #define RECV_COMPL 1000
 #define SEND_COMPL 1001
+
+#define LOGIN_PAYLOAD ((ULONGLONG)0x7fffffffffffffff)
 
 BOOL LanServer::Start(DWORD dwMaxSession)
 {
@@ -206,9 +211,7 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 		} while (0);
 
 		if (InterlockedDecrement(&pSession->IoCnt) == 0)
-		{
 			pLanServer->ReleaseSession(pSession);
-		}
 	}
 }
 
@@ -246,44 +249,15 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 		LeaveCriticalSection(&pLanServer->stackLock_);
 		Session* pSession = pLanServer->pSessionArr_ + shIndex;
 		pSession->Init(clientSock, g_ullID, shIndex);
-		++g_ullID;
-#ifdef ACCEPT
-		LOG(L"DEBUG", DEBUG, TEXTFILE, L"Accept! Thread ID : %u Session ID : %llu", GetCurrentThreadId(), g_ullID);
-#endif
 		CreateIoCompletionPort((HANDLE)pSession->sock, pLanServer->hcp_, (ULONG_PTR)pSession, 0);
+		++g_ullID;
 
-		Packet* pLoginPacket = new Packet;
-		(*pLoginPacket) << (ULONGLONG)0x7fffffffffffffff;
-		*(NET_HEADER*)(pLoginPacket->pBuffer_) = pLoginPacket->GetUsedDataSize();
-		pSession->sendRB.Enqueue((char*)&pLoginPacket, sizeof(Packet*));
-		
-		if (!pLanServer->SendPost(pSession))
-		{
+		InterlockedIncrement(&pSession->IoCnt);
+		pLanServer->OnAccept(pSession->id);
+		pLanServer->RecvPost(pSession);
+		if (InterlockedDecrement(&pSession->IoCnt) == 0)
 			pLanServer->ReleaseSession(pSession);
-			continue;
-		}
 
-		/*
-		[DEBUG]  [2024-08-29 20:50:51 / DEBUG  / 000001948]  Accept! Thread ID : 7412 Session ID : 216
-		[DEBUG]  [2024-08-29 20:50:51 / DEBUG  / 000001949]  Thread ID : 7412, SendPost WSASend Session ID : 1125899906842839, IoCount : 1
-		[DEBUG]  [2024-08-29 20:50:51 / DEBUG  / 000001950]  Thread ID : 7412, RecvPost WSARecv Session ID : 1125899906842839, IoCount : 2
-		[DEBUG]  [2024-08-29 20:50:51 / DEBUG  / 000001951]  Thread ID : 1644, GQCS return Session ID : 1125899906842839, IoCount : 2
-		[DEBUG]  [2024-08-29 20:50:51 / DEBUG  / 000001952]  Thread ID : 7412, WSARecv Fail Session ID : 1125899906842839, IoCount : 1
-		[DEBUG]  [2024-08-29 20:50:51 / DEBUG  / 000001954]  Thread ID : 7412, Delete Session : 1125899906842839, IoCnt : 1
-		[DEBUG]  [2024-08-29 20:50:51 / DEBUG  / 000001953]  Thread ID : 1644, Send Complete Session ID : 1125899906842839, IoCnt : 1
-		SendPost는 성공하고 RecvPost가 바로 실패하는 경우 기존 코드에서는 SendPost가 없어서 바로 실패하자마자 Release 햇엇다. IoCnt는 무조건 0이엇으므로,
-		하지만 이제는 확인하지않으면 IoCnt가 1인데 삭제하고, Send완료통지 처리에서 댕글링 포인터를 건드려서 문제가 생기는 경우가 발생해서 이 경우에도 체크 한다. 
-		*/
-		do
-		{
-			if (pLanServer->RecvPost(pSession))
-				break;
-
-			if (InterlockedExchange(&pSession->IoCnt, pSession->IoCnt) != 0)
-				break;
-
-			pLanServer->ReleaseSession(pSession);
-		} while (0);
 	}
 	return 0;
 }
@@ -298,6 +272,9 @@ BOOL LanServer::OnConnectionRequest()
 
 void* LanServer::OnAccept(ID id)
 {
+	Packet* pPacket = new Packet;
+	(*pPacket) << LOGIN_PAYLOAD;
+	SendPacket(id, pPacket);
 	return nullptr;
 }
 
@@ -441,8 +418,7 @@ BOOL LanServer::SendPost(Session* pSession)
 void LanServer::ReleaseSession(Session* pSession)
 {
 #ifdef SESSION_DELETE 
-	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Delete Session : %llu, IoCnt : %d",
-		GetCurrentThreadId(), pSession->id.ullId, InterlockedExchange(&pSession->IoCnt, pSession->IoCnt));
+	LOG_ASYNC(L"Delete Session : %llu", pSession->id.ullId);
 #endif
 	ReleaseSendFailPacket(pSession);
 	closesocket(pSession->sock);
@@ -458,15 +434,13 @@ void LanServer::ReleaseSession(Session* pSession)
 	DisconnectStack_.Push((void**)&shIndex);
 	LeaveCriticalSection(&stackLock_);
 	InterlockedIncrement(&lDisconnectTPS_);
-	if (InterlockedDecrement(&lSessionNum_) < 0)
-		__debugbreak();
+	InterlockedDecrement(&lSessionNum_);
 }
 
 void LanServer::RecvProc(Session* pSession, DWORD dwNumberOfByteTransferred)
 {
 #ifdef SENDRECV
-	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Recv Complete Session ID : %llu, IoCnt : %d",
-		GetCurrentThreadId(), pSession->id.ullId, InterlockedExchange(&pSession->IoCnt, pSession->IoCnt));
+	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Recv Complete Session ID : %llu", GetCurrentThreadId(), pSession->id.ullId);
 #endif
 	SHORT shHeader;
 	Packet packet;
@@ -495,16 +469,14 @@ void LanServer::RecvProc(Session* pSession, DWORD dwNumberOfByteTransferred)
 
 void LanServer::SendProc(Session* pSession, DWORD dwNumberOfBytesTransferred)
 {
-#ifdef SENDRECV
-	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Send Complete Session ID : %llu, IoCnt : %d",
-		GetCurrentThreadId(), pSession->id.ullId, InterlockedExchange(&pSession->IoCnt, pSession->IoCnt));
-#endif
-
 #ifdef IO_RET
 	ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
 	LOG_ASYNC(L"Session ID : %llu, Send Amount : %u", pSession->id.ullId, dwNOBT);
 #endif
 	ClearPacket(pSession);
+#ifdef SENDRECV
+	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Send Complete Session ID : %llu", GetCurrentThreadId(), pSession->id.ullId);
+#endif
 	InterlockedExchange((LONG*)&pSession->bSendingInProgress, FALSE);
 
 	if (pSession->sendRB.GetUseSize() > 0)
