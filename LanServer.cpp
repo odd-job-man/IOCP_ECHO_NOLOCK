@@ -6,6 +6,7 @@
 #include "Logger.h"
 #include "IHandler.h"
 #include "Stack.h"
+#include "Packet.h"
 #include "LanServer.h"
 
 #pragma comment(lib,"ws2_32.lib")
@@ -381,7 +382,7 @@ BOOL LanServer::SendPost(Session* pSession)
 		Packet* pPacket;
 		pSession->sendRB.PeekAt((char*)&pPacket, out, sizeof(Packet*));
 		wsa[i].buf = (char*)pPacket->pBuffer_;
-		wsa[i].len = pPacket->GetNetUseSize();
+		wsa[i].len = pPacket->GetUsedDataSize() + sizeof(NET_HEADER);
 		MoveInOrOutPos_MACRO(out, sizeof(Packet*));
 	}
 
@@ -482,10 +483,7 @@ void LanServer::SendProc(Session* pSession, DWORD dwNumberOfBytesTransferred)
 		SendPost(pSession);
 }
 
-char* LanServer::GetNetBufferPtr(Packet* pPacket)
-{
-	return pPacket->pBuffer_;
-}
+
 
 
 

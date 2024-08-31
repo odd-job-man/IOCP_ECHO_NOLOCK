@@ -1,11 +1,11 @@
 #include <WinSock2.h>
 #include <windows.h>
 #include "FreeList.h"
-#include "Packet.h"
 #include "Session.h"
 #include "IHandler.h"
 #include "Stack.h"
 #include "LanServer.h"
+#include "Packet.h"
 
 static FreeList<Packet> freeList{ false,0 };
 

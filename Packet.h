@@ -21,16 +21,7 @@ public:
 		DEFAULT_SIZE = (RINGBUFFER_SIZE / 8 + NET_HEADER_SIZE)
 	};
 
-	Packet()
-		:front_{ NET_HEADER_SIZE }, rear_{ NET_HEADER_SIZE }
-	{
-		pBuffer_ = new char[DEFAULT_SIZE];
-	}
 
-	~Packet()
-	{
-		delete[] pBuffer_;
-	}
 
 	void Clear(void)
 	{
@@ -241,14 +232,23 @@ public:
 	}
 	static Packet* Alloc();
 	static void Free(Packet* pPacket);
-private:
-	friend class LanServer;
-	friend unsigned __stdcall IOCPWorkerThread(LPVOID arg);
-	int GetNetUseSize()
-	{
-		return rear_ - front_ + NET_HEADER_SIZE;
-	}
 	char* pBuffer_;
+private:	
 	int front_ = NET_HEADER_SIZE;
 	int rear_ = NET_HEADER_SIZE;
+
+	Packet()
+		:front_{ NET_HEADER_SIZE }, rear_{ NET_HEADER_SIZE }
+	{
+		pBuffer_ = new char[DEFAULT_SIZE];
+	}
+
+	~Packet()
+	{
+		delete[] pBuffer_;
+	}
+
+	friend unsigned __stdcall IOCPWorkerThread(LPVOID arg);
+	template<typename T> friend class FreeList;
+	template<typename T> friend class FreeListNode;
 };

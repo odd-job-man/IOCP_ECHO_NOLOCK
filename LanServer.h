@@ -33,7 +33,6 @@ private:
 	virtual void ReleaseSession(Session* pSession);
 	void RecvProc(Session* pSession, DWORD dwNumberOfBytesTransferred);
 	void SendProc(Session* pSession, DWORD dwNumberOfBytesTransferred);
-	char* GetNetBufferPtr(Packet* pPacket);
 
 	// Monitoring º¯¼ö
 	// Accept
