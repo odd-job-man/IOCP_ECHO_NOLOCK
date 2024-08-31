@@ -135,11 +135,14 @@
   <ItemGroup>
     <ClCompile Include="LanServer.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Packet.cpp" />
     <ClCompile Include="RingBuffer.cpp" />
     <ClCompile Include="Session.cpp" />
     <ClCompile Include="Stack.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="FreeList.h" />
+    <ClInclude Include="FreeListNode.h" />
     <ClInclude Include="LanServer.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="Packet.h" />

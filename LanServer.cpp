@@ -2,12 +2,11 @@
 #include <process.h>
 #include <stdio.h>
 #include <WinSock2.h>
+#include <windows.h>
 #include "Logger.h"
 #include "IHandler.h"
 #include "Stack.h"
 #include "LanServer.h"
-
-
 
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"LoggerMt.lib")
@@ -382,7 +381,7 @@ BOOL LanServer::SendPost(Session* pSession)
 	{
 		Packet* pPacket;
 		pSession->sendRB.PeekAt((char*)&pPacket, out, sizeof(Packet*));
-		wsa[i].buf = (char*)pPacket;
+		wsa[i].buf = (char*)pPacket->pBuffer_;
 		wsa[i].len = pPacket->GetNetUseSize();
 		MoveInOrOutPos_MACRO(out, sizeof(Packet*));
 	}

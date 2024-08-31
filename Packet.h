@@ -22,7 +22,14 @@ public:
 
 	Packet()
 		:front_{ NET_HEADER_SIZE }, rear_{ NET_HEADER_SIZE }
-	{}
+	{
+		pBuffer_ = new char[DEFAULT_SIZE];
+	}
+
+	~Packet()
+	{
+		delete[] pBuffer_;
+	}
 
 	void Clear(void)
 	{
@@ -231,14 +238,16 @@ public:
 		front_ += sizeof(value);
 		return *this;
 	}
-	private:
+	static Packet* Alloc();
+	static void Free(Packet* pPacket);
+private:
 	friend class LanServer;
 	friend unsigned __stdcall IOCPWorkerThread(LPVOID arg);
 	int GetNetUseSize()
 	{
 		return rear_ - front_ + NET_HEADER_SIZE;
 	}
-	char pBuffer_[DEFAULT_SIZE];
+	char* pBuffer_;
 	int front_ = NET_HEADER_SIZE;
 	int rear_ = NET_HEADER_SIZE;
 };
