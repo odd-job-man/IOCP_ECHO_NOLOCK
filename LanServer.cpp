@@ -442,7 +442,7 @@ void LanServer::RecvProc(Session* pSession, DWORD dwNumberOfByteTransferred)
 	LOG(L"DEBUG", DEBUG, TEXTFILE, L"Thread ID : %u, Recv Complete Session ID : %llu", GetCurrentThreadId(), pSession->id.ullId);
 #endif
 	SHORT shHeader;
-	Packet packet;
+	Packet* pPacket = Packet::Alloc();
 #ifdef IO_RET
 	ULONGLONG ret = InterlockedAdd64((LONG64*)&pSession->ullRecv, dwNOBT);
 	LOG_ASYNC(L"Session ID : %llu, Recv Amount : %u", pSession->id.ullId, dwNOBT);
@@ -456,14 +456,15 @@ void LanServer::RecvProc(Session* pSession, DWORD dwNumberOfByteTransferred)
 		if (pSession->recvRB.GetUseSize() < sizeof(shHeader) + shHeader)
 			break;
 
-		pSession->recvRB.Dequeue(packet.GetBufferPtr(), sizeof(shHeader) + shHeader);
-		packet.MoveWritePos(sizeof(shHeader) + shHeader);
-		packet.MoveReadPos(sizeof(shHeader));
-		OnRecv(pSession->id, &packet);
-		packet.Clear();
+		pSession->recvRB.Dequeue(pPacket->GetBufferPtr(), sizeof(shHeader) + shHeader);
+		pPacket->MoveWritePos(sizeof(shHeader) + shHeader);
+		pPacket->MoveReadPos(sizeof(shHeader));
+		OnRecv(pSession->id, pPacket);
+		pPacket->Clear();
 		InterlockedIncrement(&lRecvTPS_);
 	}
 	RecvPost(pSession);
+	Packet::Free(pPacket);
 }
 
 void LanServer::SendProc(Session* pSession, DWORD dwNumberOfBytesTransferred)
