@@ -232,6 +232,7 @@ public:
 	}
 	static Packet* Alloc();
 	static void Free(Packet* pPacket);
+	static void ReleasePacketPool();
 	char* pBuffer_;
 private:	
 	int front_ = NET_HEADER_SIZE;

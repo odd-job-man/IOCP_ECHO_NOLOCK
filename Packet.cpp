@@ -20,3 +20,8 @@ void Packet::Free(Packet* pPacket)
 {
     freeList.Free(pPacket);
 }
+
+void Packet::ReleasePacketPool()
+{
+    freeList.ReleaseAll();
+}

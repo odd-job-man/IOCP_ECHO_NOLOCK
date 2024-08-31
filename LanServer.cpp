@@ -67,20 +67,8 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
 
-	HANDLE hIOCPWorkerThread;
-	HANDLE hAcceptThread;
-
-	hAcceptThread = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, CREATE_SUSPENDED, nullptr);
-	if (!hAcceptThread)
-	{
-		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE AccpetThread Fail ErrCode : %u", WSAGetLastError());
-		__debugbreak();
-	}
-	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE AccpetThread OK!");
-
-
-	g_ListenSock = socket(AF_INET, SOCK_STREAM, 0);
-	if (g_ListenSock == INVALID_SOCKET)
+	hListenSock_ = socket(AF_INET, SOCK_STREAM, 0);
+	if (hListenSock_== INVALID_SOCKET)
 	{
 		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE Listen SOCKET Fail ErrCode : %u", WSAGetLastError());
 		__debugbreak();
@@ -93,7 +81,7 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	serveraddr.sin_family = AF_INET;
 	serveraddr.sin_addr.S_un.S_addr = htonl(INADDR_ANY);
 	serveraddr.sin_port = htons(SERVERPORT);
-	retval = bind(g_ListenSock, (SOCKADDR*)&serveraddr, sizeof(serveraddr));
+	retval = bind(hListenSock_, (SOCKADDR*)&serveraddr, sizeof(serveraddr));
 	if (retval == SOCKET_ERROR)
 	{
 		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"bind Fail ErrCode : %u", WSAGetLastError());
@@ -102,7 +90,7 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"bind OK");
 
 	// listen
-	retval = listen(g_ListenSock, SOMAXCONN);
+	retval = listen(hListenSock_, SOMAXCONN);
 	if (retval == SOCKET_ERROR)
 	{
 		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"listen Fail ErrCode : %u", WSAGetLastError());
@@ -114,15 +102,27 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	linger linger;
 	linger.l_linger = 0;
 	linger.l_onoff = 1;
-	setsockopt(g_ListenSock, SOL_SOCKET, SO_LINGER, (char*)&linger, sizeof(linger));
+	setsockopt(hListenSock_, SOL_SOCKET, SO_LINGER, (char*)&linger, sizeof(linger));
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"linger() OK");
 #endif
 
 #ifdef ZERO_BYTE_SEND
 	DWORD dwSendBufSize = 0;
-	setsockopt(g_ListenSock, SOL_SOCKET, SO_SNDBUF, (char*)&dwSendBufSize, sizeof(dwSendBufSize));
+	setsockopt(hListenSock_, SOL_SOCKET, SO_SNDBUF, (char*)&dwSendBufSize, sizeof(dwSendBufSize));
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"Zerobyte Send OK");
 #endif
+
+	hIOCPWorkerThreadArr_ = new HANDLE[si.dwNumberOfProcessors * 2];
+	for (DWORD i = 0; i < si.dwNumberOfProcessors * 2; ++i)
+	{
+		hIOCPWorkerThreadArr_[i] = (HANDLE)_beginthreadex(NULL, 0, IOCPWorkerThread, this, 0, nullptr);
+		if (!hIOCPWorkerThreadArr_[i])
+		{
+			LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE WorkerThread Fail ErrCode : %u", WSAGetLastError());
+			__debugbreak();
+		}
+	}
+	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE IOCP WorkerThread OK Num : %u!", si.dwNumberOfProcessors);
 
 	pSessionArr_ = new Session[dwMaxSession];
 	lMaxSession_ = dwMaxSession;
@@ -131,25 +131,13 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 		DisconnectStack_.Push((void**)&i);
 	InitializeCriticalSection(&stackLock_);
 
-	hAcceptThread = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, 0, nullptr);
-	if (!hAcceptThread)
+	hAcceptThread_ = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, 0, nullptr);
+	if (!hAcceptThread_)
 	{
 		LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE AccpetThread Fail ErrCode : %u", WSAGetLastError());
 		__debugbreak();
 	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE AccpetThread OK!");
-
-	for (DWORD i = 0; i < si.dwNumberOfProcessors * 2; ++i)
-	{
-		hIOCPWorkerThread = (HANDLE)_beginthreadex(NULL, 0, IOCPWorkerThread, this, 0, nullptr);
-		if (!hIOCPWorkerThread)
-		{
-			LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE WorkerThread Fail ErrCode : %u", WSAGetLastError());
-			__debugbreak();
-		}
-		CloseHandle(hIOCPWorkerThread);
-	}
-	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE IOCP WorkerThread OK Num : %u!", si.dwNumberOfProcessors);
 	return 0;
 }
 
@@ -175,7 +163,7 @@ __forceinline void ReleaseSendFailPacket(Session* pSession)
 	}
 }
 
-unsigned __stdcall IOCPWorkerThread(LPVOID arg)
+unsigned __stdcall LanServer::IOCPWorkerThread(LPVOID arg)
 {
 	LanServer* pLanServer = (LanServer*)arg;
 	while (1)
@@ -215,7 +203,7 @@ unsigned __stdcall IOCPWorkerThread(LPVOID arg)
 	}
 }
 
-unsigned __stdcall AcceptThread(LPVOID arg)
+unsigned __stdcall LanServer::AcceptThread(LPVOID arg)
 {
 	SOCKET clientSock;
 	SOCKADDR_IN clientAddr;
@@ -225,12 +213,16 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 
 	while (1)
 	{
-		clientSock = accept(g_ListenSock, (SOCKADDR*)&clientAddr, &addrlen);
+		clientSock = accept(pLanServer->hListenSock_, (SOCKADDR*)&clientAddr, &addrlen);
 
 		if (clientSock == INVALID_SOCKET)
 		{
 			DWORD dwErrCode = WSAGetLastError();
-			__debugbreak();
+			if (dwErrCode != WSAEINTR && dwErrCode != WSAENOTSOCK)
+			{
+				__debugbreak();
+			}
+			return 0;
 		}
 
 
@@ -259,7 +251,6 @@ unsigned __stdcall AcceptThread(LPVOID arg)
 			pLanServer->ReleaseSession(pSession);
 
 	}
-	return 0;
 }
 
 BOOL LanServer::OnConnectionRequest()
@@ -304,6 +295,46 @@ void LanServer::Monitoring()
 #endif
 
 	lAcceptTPS_ = lDisconnectTPS_ = lRecvTPS_ = lSendTPS_ = 0;
+}
+
+void LanServer::Stop()
+{
+	SYSTEM_INFO si;
+	GetSystemInfo(&si);
+
+	closesocket(hListenSock_);
+	WaitForSingleObject(hAcceptThread_, INFINITE);
+
+	for (int i = 0; i < lMaxSession_; ++i)
+	{
+		CancelIoEx((HANDLE)pSessionArr_[i].sock, nullptr);
+	}
+
+	while (InterlockedExchange(&lSessionNum_, lSessionNum_) > 0);
+
+	for (DWORD i = 0; i < si.dwNumberOfProcessors * 2; ++i)
+	{
+		PostQueuedCompletionStatus(hcp_, 0, 0, 0);
+	}
+
+	WaitForMultipleObjects(si.dwNumberOfProcessors * 2, hIOCPWorkerThreadArr_, TRUE, INFINITE);
+	for (DWORD i = 0; i < si.dwNumberOfProcessors * 2; ++i)
+	{
+		CloseHandle(hIOCPWorkerThreadArr_[i]);
+	}
+	delete[] hIOCPWorkerThreadArr_;
+
+	for (DWORD i = 0; i < si.dwNumberOfProcessors * 2; ++i)
+	{
+		if (InterlockedExchange((LONG*)&pSessionArr_[i].bUsing, pSessionArr_[i].bUsing) == TRUE)
+			__debugbreak();
+	}
+	delete[] pSessionArr_;
+	Packet::ReleasePacketPool();
+	DisconnectStack_.Clear();
+	CloseHandle(hcp_);
+	DeleteCriticalSection(&stackLock_);
+	WSACleanup();
 }
 
 void LanServer::SendPacket(ID id, Packet* pPacket)
@@ -421,7 +452,7 @@ void LanServer::ReleaseSession(Session* pSession)
 #endif
 	ReleaseSendFailPacket(pSession);
 	closesocket(pSession->sock);
-	pSession->bUsing = FALSE;
+	InterlockedExchange((LONG*)&pSession->bUsing, FALSE);
 	SHORT shIndex = (SHORT)(pSession - pSessionArr_);
 	if (pSession->sendRB.GetUseSize() > 0)
 		__debugbreak();

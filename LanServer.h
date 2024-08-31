@@ -9,7 +9,6 @@ class Stack;
 class LanServer : public IHandler
 {
 public:
-	//virtual void Stop();
 	//virtual int GetSessionCount();
 	//virtual BOOL Disconnect(ULONGLONG ullID);
 	//virtual void OnRelease(ULONGLONG ullID);
@@ -19,15 +18,19 @@ public:
 	virtual void* OnAccept(ID id);
 	virtual void OnRecv(ID id, Packet* pPacket);
 	void Monitoring();
+	virtual void Stop();
+	static unsigned __stdcall AcceptThread(LPVOID arg);
+	static unsigned __stdcall IOCPWorkerThread(LPVOID arg);
 private:
-	friend unsigned __stdcall AcceptThread(LPVOID arg);
-	friend unsigned __stdcall IOCPWorkerThread(LPVOID arg);
 	LONG lSessionNum_ = 0;
 	LONG lMaxSession_;
 	Session* pSessionArr_;
 	Stack DisconnectStack_;
 	CRITICAL_SECTION stackLock_;
 	HANDLE hcp_;
+	HANDLE hAcceptThread_;
+	HANDLE* hIOCPWorkerThreadArr_;
+	SOCKET hListenSock_;
 	virtual BOOL RecvPost(Session* pSession);
 	virtual BOOL SendPost(Session* pSession);
 	virtual void ReleaseSession(Session* pSession);

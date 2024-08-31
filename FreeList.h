@@ -42,12 +42,11 @@ public:
 #endif
 #endif
 
-	~FreeList()
+	void ReleaseAll()
 	{
 		EnterCriticalSection(&cs_);
 		if (IsEmpty())
 			return;
-		FreeListNode<T>* temp;
 		while (top_->pNext)
 		{
 			FreeListNode<T>* temp = top_;
@@ -55,6 +54,11 @@ public:
 			delete temp;
 		}
 		LeaveCriticalSection(&cs_);
+	}
+
+	~FreeList()
+	{
+		ReleaseAll();
 		DeleteCriticalSection(&cs_);
 	}
 	

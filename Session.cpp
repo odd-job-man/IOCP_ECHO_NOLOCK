@@ -5,7 +5,7 @@ BOOL Session::Init(SOCKET clientSock, ULONGLONG ullClientID, SHORT shIdx)
 {
     sock = clientSock;
     bSendingInProgress = FALSE;
-    bUsing = TRUE;
+    _InterlockedExchange((LONG*)&bUsing, TRUE);
     MAKE_SESSION_INDEX(id, ullClientID, shIdx);
     IoCnt = 0;
     lSendBufNum = 0;
