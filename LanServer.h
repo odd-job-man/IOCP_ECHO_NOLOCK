@@ -4,6 +4,8 @@ unsigned __stdcall AcceptThread(LPVOID arg);
 unsigned __stdcall IOCPWorkerThread(LPVOID arg);
 
 
+class Stack; 
+
 class LanServer : public IHandler
 {
 public:
@@ -31,6 +33,7 @@ private:
 	virtual void ReleaseSession(Session* pSession);
 	void RecvProc(Session* pSession, DWORD dwNumberOfBytesTransferred);
 	void SendProc(Session* pSession, DWORD dwNumberOfBytesTransferred);
+	char* GetNetBufferPtr(Packet* pPacket);
 
 	// Monitoring º¯¼ö
 	// Accept

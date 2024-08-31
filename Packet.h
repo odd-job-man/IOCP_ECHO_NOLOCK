@@ -2,6 +2,7 @@
 #include <memory.h>
 
 typedef short NET_HEADER;
+
 class Packet
 {
 public:

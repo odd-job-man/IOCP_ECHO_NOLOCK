@@ -159,7 +159,7 @@ __forceinline void ClearPacket(Session* pSession)
 	{
 		Packet* pPacket;
 		pSession->sendRB.Dequeue((char*)&pPacket, sizeof(Packet*));
-		delete pPacket;
+		Packet::Free(pPacket);
 	}
 }
 
@@ -170,7 +170,7 @@ __forceinline void ReleaseSendFailPacket(Session* pSession)
 	{
 		Packet* pPacket;
 		pSession->sendRB.Dequeue((char*)&pPacket, sizeof(Packet*));
-		delete pPacket;
+		Packet::Free(pPacket);
 	}
 }
 
@@ -271,7 +271,7 @@ BOOL LanServer::OnConnectionRequest()
 
 void* LanServer::OnAccept(ID id)
 {
-	Packet* pPacket = new Packet;
+	Packet* pPacket = Packet::Alloc();
 	(*pPacket) << LOGIN_PAYLOAD;
 	SendPacket(id, pPacket);
 	return nullptr;
@@ -282,8 +282,7 @@ void LanServer::OnRecv(ID id, Packet* pPacket)
 	ULONGLONG ullPayLoad;
 	(*pPacket) >> ullPayLoad;
 
-	Packet* pSendPacket = new Packet;
-	pSendPacket->Clear();
+	Packet* pSendPacket = Packet::Alloc();
 	(*pSendPacket) << ullPayLoad;
 	SendPacket(id, pSendPacket);
 }
@@ -308,7 +307,7 @@ void LanServer::Monitoring()
 
 void LanServer::SendPacket(ID id, Packet* pPacket)
 {
-	Session* pSession = &pSessionArr_[GET_SESSION_INDEX(id)];
+	Session* pSession = pSessionArr_ + GET_SESSION_INDEX(id);
 	*(NET_HEADER*)pPacket->pBuffer_ = pPacket->GetUsedDataSize();
 	pSession->sendRB.Enqueue((const char*)&pPacket, sizeof(pPacket));
 	SendPost(pSession);
@@ -482,6 +481,12 @@ void LanServer::SendProc(Session* pSession, DWORD dwNumberOfBytesTransferred)
 	if (pSession->sendRB.GetUseSize() > 0)
 		SendPost(pSession);
 }
+
+char* LanServer::GetNetBufferPtr(Packet* pPacket)
+{
+	return pPacket->pBuffer_;
+}
+
 
 
 
