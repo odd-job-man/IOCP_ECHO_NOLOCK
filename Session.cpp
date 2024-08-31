@@ -1,3 +1,4 @@
+#include <WinSock2.h>
 #include "Session.h"
 
 BOOL Session::Init(SOCKET clientSock, ULONGLONG ullClientID, SHORT shIdx)

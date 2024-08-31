@@ -1,3 +1,5 @@
+#include "IHandler.h"
+#include "Stack.h"
 #include "LanServer.h"
 #include "Logger.h"
 #define MAX_SESSION 3000

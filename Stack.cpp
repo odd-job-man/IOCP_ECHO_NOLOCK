@@ -1,3 +1,4 @@
+#include <windows.h>
 #include "Stack.h"
 
 BOOL Stack::Init(DWORD dwElementNum, DWORD dwElementSize)

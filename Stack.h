@@ -1,5 +1,4 @@
 #pragma once
-#include <windows.h>
 class Stack
 {
 public:

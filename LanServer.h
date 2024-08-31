@@ -1,8 +1,4 @@
 #pragma once
-#include "Session.h"
-#include "IHandler.h"
-#include "Stack.h"
-#include <unordered_map>
 
 unsigned __stdcall AcceptThread(LPVOID arg);
 unsigned __stdcall IOCPWorkerThread(LPVOID arg);
