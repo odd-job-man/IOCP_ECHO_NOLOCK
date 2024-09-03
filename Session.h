@@ -3,11 +3,11 @@
 
 //#define IO_RET
 
-#define GET_SESSION_INDEX(id) (id.sh[3])
+#define GET_SESSION_INDEX(id) (id.ullId & 0xFFFF)
 #define MAKE_SESSION_INDEX(Ret,ullID,index)\
 do{\
-	Ret.ullId = ullID;\
-	Ret.sh[3] = index;\
+Ret.ullId = Ret.ullId << 16;\
+Ret.ullId ^= index;\
 }while(0)\
 
 union ID
