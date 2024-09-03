@@ -13,10 +13,6 @@ Ret.ullId ^= index;\
 union ID
 {
 	ULONGLONG ullId;
-	struct
-	{
-		short sh[4];
-	};
 };
 
 struct Session
