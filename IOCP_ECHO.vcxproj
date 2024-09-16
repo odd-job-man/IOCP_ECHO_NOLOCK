@@ -135,6 +135,7 @@
   <ItemGroup>
     <ClCompile Include="FreeList.cpp" />
     <ClCompile Include="LanServer.cpp" />
+    <ClCompile Include="LFStack.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Packet.cpp" />
     <ClCompile Include="RingBuffer.cpp" />

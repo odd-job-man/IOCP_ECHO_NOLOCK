@@ -1,6 +1,6 @@
 #include <windows.h>
-#include "Packet.h"
 #include "FreeList.h"
+#include "Packet.h"
 
 static FreeList freeList;
 

@@ -25,8 +25,8 @@ private:
 	LONG lSessionNum_ = 0;
 	LONG lMaxSession_;
 	Session* pSessionArr_;
-	Stack DisconnectStack_;
-	CRITICAL_SECTION stackLock_;
+	FreeList disconnectIdxFreeList_;
+	LFStack DisconnectStack_;
 	HANDLE hcp_;
 	HANDLE hAcceptThread_;
 	HANDLE* hIOCPWorkerThreadArr_;

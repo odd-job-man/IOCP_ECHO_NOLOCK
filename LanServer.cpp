@@ -5,18 +5,24 @@
 #include <windows.h>
 #include "Logger.h"
 #include "IHandler.h"
-#include "Stack.h"
+#include "FreeList.h"
+#include "LFStack.h"
 #include "Packet.h"
 #include "LanServer.h"
 
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"LoggerMt.lib")
 
-//#define GQCSRET
-//#define SENDRECV
-//#define WILL_SEND
-//#define WILL_RECV
-//#define SESSION_DELETE
+struct DISCONNECT_INDEX 
+{
+	SHORT shIdx;
+	LF_STACK_METADATA lfStackMetaData;
+};
+
+__forceinline DISCONNECT_INDEX* StackMetaToIdx(LF_STACK_METADATA* pStackMetaData)
+{
+	return (DISCONNECT_INDEX*)((char*)pStackMetaData - offsetof(DISCONNECT_INDEX, lfStackMetaData));
+}
 
 int g_iCount = 0;
 
@@ -125,12 +131,17 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE IOCP WorkerThread OK Num : %u!", si.dwNumberOfProcessors);
 
 	Packet::MemPoolInit();
+	InitLFStack(&DisconnectStack_);
+	Init(&disconnectIdxFreeList_, sizeof(DISCONNECT_INDEX), FALSE, nullptr, nullptr);
+
 	pSessionArr_ = new Session[dwMaxSession];
 	lMaxSession_ = dwMaxSession;
-	DisconnectStack_.Init(dwMaxSession, sizeof(SHORT));
 	for (int i = dwMaxSession - 1; i >= 0; --i)
-		DisconnectStack_.Push((void**)&i);
-	InitializeCriticalSection(&stackLock_);
+	{
+		DISCONNECT_INDEX* pIdx = (DISCONNECT_INDEX*)Alloc(&disconnectIdxFreeList_);
+		pIdx->shIdx = i;
+		Push_LF_STACK(&DisconnectStack_, &pIdx->lfStackMetaData);
+	}
 
 	hAcceptThread_ = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, 0, nullptr);
 	if (!hAcceptThread_)
@@ -236,12 +247,11 @@ unsigned __stdcall LanServer::AcceptThread(LPVOID arg)
 		InterlockedIncrement((LONG*)&pLanServer->lAcceptTPS_);
 		InterlockedIncrement((LONG*)&pLanServer->lSessionNum_);
 
-		SHORT shIndex;
-		EnterCriticalSection(&pLanServer->stackLock_);
-		pLanServer->DisconnectStack_.Pop((void**)&shIndex);
-		LeaveCriticalSection(&pLanServer->stackLock_);
-		Session* pSession = pLanServer->pSessionArr_ + shIndex;
-		pSession->Init(clientSock, g_ullID, shIndex);
+		DISCONNECT_INDEX* pIdx = StackMetaToIdx(Pop_LF_STACK(&pLanServer->DisconnectStack_));
+		Session* pSession = pLanServer->pSessionArr_ + pIdx->shIdx;
+		pSession->Init(clientSock, g_ullID, pIdx->shIdx);
+		Free(&pLanServer->disconnectIdxFreeList_, (void*)pIdx);
+
 		CreateIoCompletionPort((HANDLE)pSession->sock, pLanServer->hcp_, (ULONG_PTR)pSession, 0);
 		++g_ullID;
 
@@ -332,9 +342,12 @@ void LanServer::Stop()
 	}
 	delete[] pSessionArr_;
 	Packet::ReleasePacketPool();
-	DisconnectStack_.Clear();
+
+	for (int i = 0; i < DisconnectStack_.lNum; ++i)
+		Free(&disconnectIdxFreeList_,StackMetaToIdx(Pop_LF_STACK(&DisconnectStack_)));
+
+	Clear(&disconnectIdxFreeList_);
 	CloseHandle(hcp_);
-	DeleteCriticalSection(&stackLock_);
 	WSACleanup();
 }
 
@@ -454,16 +467,17 @@ void LanServer::ReleaseSession(Session* pSession)
 	ReleaseSendFailPacket(pSession);
 	closesocket(pSession->sock);
 	InterlockedExchange((LONG*)&pSession->bUsing, FALSE);
-	SHORT shIndex = (SHORT)(pSession - pSessionArr_);
 	if (pSession->sendRB.GetUseSize() > 0)
 		__debugbreak();
 
 #ifdef _DEBUG
 	_ASSERTE(_CrtCheckMemory());
 #endif
-	EnterCriticalSection(&stackLock_);
-	DisconnectStack_.Push((void**)&shIndex);
-	LeaveCriticalSection(&stackLock_);
+
+	DISCONNECT_INDEX* pIdx = (DISCONNECT_INDEX*)Alloc(&disconnectIdxFreeList_);
+	pIdx->shIdx = (SHORT)(pSession - pSessionArr_);
+	Push_LF_STACK(&DisconnectStack_, &pIdx->lfStackMetaData);
+
 	InterlockedIncrement(&lDisconnectTPS_);
 	InterlockedDecrement(&lSessionNum_);
 }
