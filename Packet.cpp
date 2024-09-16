@@ -1,27 +1,35 @@
-#include <WinSock2.h>
 #include <windows.h>
-#include "FreeList.h"
-#include "Session.h"
-#include "IHandler.h"
-#include "Stack.h"
-#include "LanServer.h"
 #include "Packet.h"
+#include "FreeList.h"
 
-static FreeList<Packet> freeList{ false,0 };
+static FreeList freeList;
+
+void InitProc(void* pData)
+{
+    Packet* pPacket = (Packet*)pData;
+    pPacket->front_ = Packet::NET_HEADER_SIZE;
+    pPacket->rear_ = Packet::NET_HEADER_SIZE;
+    pPacket->pBuffer_ = new char[Packet::DEFAULT_SIZE];
+}
 
 Packet* Packet::Alloc()
 {
-    Packet* pPacket = freeList.Alloc();
+    Packet* pPacket = (Packet*)::Alloc(&freeList);
     pPacket->Clear();
     return pPacket;
 }
 
+void Packet::MemPoolInit()
+{
+    ::Init(&freeList, sizeof(Packet), FALSE, InitProc, NULL);
+}
+
 void Packet::Free(Packet* pPacket)
 {
-    freeList.Free(pPacket);
+    ::Free(&freeList, pPacket);
 }
 
 void Packet::ReleasePacketPool()
 {
-    freeList.ReleaseAll();
+    ::Clear(&freeList);
 }

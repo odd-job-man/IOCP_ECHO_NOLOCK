@@ -133,6 +133,7 @@
     </Bscmake>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="FreeList.cpp" />
     <ClCompile Include="LanServer.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Packet.cpp" />
@@ -142,9 +143,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FreeList.h" />
-    <ClInclude Include="FreeListNode.h" />
     <ClInclude Include="IHandler.h" />
     <ClInclude Include="LanServer.h" />
+    <ClInclude Include="LFStack.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="Packet.h" />
     <ClInclude Include="RingBuffer.h" />

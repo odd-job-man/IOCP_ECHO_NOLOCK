@@ -124,6 +124,7 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE IOCP WorkerThread OK Num : %u!", si.dwNumberOfProcessors);
 
+	Packet::MemPoolInit();
 	pSessionArr_ = new Session[dwMaxSession];
 	lMaxSession_ = dwMaxSession;
 	DisconnectStack_.Init(dwMaxSession, sizeof(SHORT));

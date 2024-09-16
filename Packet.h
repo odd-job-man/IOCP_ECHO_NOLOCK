@@ -21,8 +21,6 @@ public:
 		DEFAULT_SIZE = (RINGBUFFER_SIZE / 8 + NET_HEADER_SIZE)
 	};
 
-
-
 	void Clear(void)
 	{
 		front_ = rear_ = NET_HEADER_SIZE;
@@ -231,10 +229,10 @@ public:
 		return *this;
 	}
 	static Packet* Alloc();
+	static void MemPoolInit();
 	static void Free(Packet* pPacket);
 	static void ReleasePacketPool();
 	char* pBuffer_;
-private:	
 	int front_ = NET_HEADER_SIZE;
 	int rear_ = NET_HEADER_SIZE;
 
@@ -250,6 +248,4 @@ private:
 	}
 
 	friend unsigned __stdcall IOCPWorkerThread(LPVOID arg);
-	template<typename T> friend class FreeList;
-	template<typename T> friend class FreeListNode;
 };

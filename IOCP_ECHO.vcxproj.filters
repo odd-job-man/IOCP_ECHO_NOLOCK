@@ -33,6 +33,9 @@
     <ClCompile Include="Packet.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="FreeList.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="LanServer.h">
@@ -53,13 +56,13 @@
     <ClInclude Include="Stack.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="IHandler.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="FreeList.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="FreeListNode.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="IHandler.h">
+    <ClInclude Include="LFStack.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
