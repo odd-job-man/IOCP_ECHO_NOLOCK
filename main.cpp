@@ -1,6 +1,5 @@
 #include <WinSock2.h>
 #include <windows.h>
-#include <stdio.h>
 #include "IHandler.h"
 #include "FreeList.h"
 #include "LFStack.h"
@@ -12,12 +11,12 @@
 
 int main()
 {
+	timeBeginPeriod(1);
 	LanServer ls;
 	BOOL bShutDown = FALSE;
 	BOOL bStopMode = FALSE;
 	LOG(L"SYSTEM", SYSTEM, CONSOLE, L"Server StartUp()!");
 	ls.Start(MAX_SESSION);
-	timeBeginPeriod(1);
 	while (!bShutDown)
 	{
 		Sleep(1000);

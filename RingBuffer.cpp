@@ -1,7 +1,5 @@
 #include "RingBuffer.h"
-#include <math.h>
 #include <memory.h>
-#include <stdio.h>
 
 #pragma warning(disable : 4700)
 
