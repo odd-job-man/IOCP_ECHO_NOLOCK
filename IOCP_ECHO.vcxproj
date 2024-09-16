@@ -133,6 +133,7 @@
     </Bscmake>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CheckMetaCntBits.cpp" />
     <ClCompile Include="FreeList.cpp" />
     <ClCompile Include="LanServer.cpp" />
     <ClCompile Include="LFStack.cpp" />
@@ -140,9 +141,9 @@
     <ClCompile Include="Packet.cpp" />
     <ClCompile Include="RingBuffer.cpp" />
     <ClCompile Include="Session.cpp" />
-    <ClCompile Include="Stack.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CheckMetaCntBits.h" />
     <ClInclude Include="FreeList.h" />
     <ClInclude Include="IHandler.h" />
     <ClInclude Include="LanServer.h" />
@@ -151,7 +152,6 @@
     <ClInclude Include="Packet.h" />
     <ClInclude Include="RingBuffer.h" />
     <ClInclude Include="Session.h" />
-    <ClInclude Include="Stack.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

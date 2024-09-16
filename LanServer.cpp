@@ -9,6 +9,7 @@
 #include "LFStack.h"
 #include "Packet.h"
 #include "LanServer.h"
+#include "CheckMetaCntBits.h"
 
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"LoggerMt.lib")
@@ -130,6 +131,9 @@ BOOL LanServer::Start(DWORD dwMaxSession)
 	}
 	LOG(L"ONOFF", SYSTEM, TEXTFILE, L"MAKE IOCP WorkerThread OK Num : %u!", si.dwNumberOfProcessors);
 
+	// 상위 17비트를 못쓰고 상위비트가 16개 이하가 되는날에는 뻑나라는 큰그림이다.
+	if (!CheckMetaCntBits())
+		__debugbreak();
 	Packet::MemPoolInit();
 	InitLFStack(&DisconnectStack_);
 	Init(&disconnectIdxFreeList_, sizeof(DISCONNECT_INDEX), FALSE, nullptr, nullptr);

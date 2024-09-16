@@ -27,9 +27,6 @@
     <ClCompile Include="Session.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="Stack.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="Packet.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -37,6 +34,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="LFStack.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="CheckMetaCntBits.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
@@ -56,9 +56,6 @@
     <ClInclude Include="Session.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="Stack.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="IHandler.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -66,6 +63,9 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="LFStack.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CheckMetaCntBits.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
