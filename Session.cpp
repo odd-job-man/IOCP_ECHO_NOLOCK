@@ -1,4 +1,9 @@
 #include <WinSock2.h>
+
+#include "CLockFreeQueue.h"
+
+#include "RingBuffer.h"
+
 #include "Session.h"
 
 BOOL Session::Init(SOCKET clientSock, ULONGLONG ullClientID, SHORT shIdx)
@@ -10,9 +15,5 @@ BOOL Session::Init(SOCKET clientSock, ULONGLONG ullClientID, SHORT shIdx)
     IoCnt = 0;
     lSendBufNum = 0;
     recvRB.ClearBuffer();
-    sendRB.ClearBuffer();
-#ifdef IO_RET
-    ullRecv = ullSend = 0;
-#endif
     return TRUE;
 }

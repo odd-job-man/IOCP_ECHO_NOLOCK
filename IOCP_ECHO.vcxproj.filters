@@ -30,15 +30,6 @@
     <ClCompile Include="Packet.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="FreeList.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="LFStack.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="CheckMetaCntBits.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="LanServer.h">
@@ -59,13 +50,16 @@
     <ClInclude Include="IHandler.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="FreeList.h">
+    <ClInclude Include="CLockFreeQueue.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="LFStack.h">
+    <ClInclude Include="CLockFreeStack.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="CheckMetaCntBits.h">
+    <ClInclude Include="CLockFreeObjectPool.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CAddressTranslator.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

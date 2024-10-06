@@ -1,8 +1,4 @@
 #pragma once
-#include "RingBuffer.h"
-
-//#define IO_RET
-
 #define GET_SESSION_INDEX(id) (id.ullId & 0xFFFF)
 #define MAKE_SESSION_INDEX(Ret,ullID,index)\
 do{\
@@ -15,6 +11,8 @@ union ID
 	ULONGLONG ullId;
 };
 
+class Packet;
+
 struct Session
 {
 	SOCKET sock;
@@ -25,8 +23,9 @@ struct Session
 	LONG IoCnt;
 	WSAOVERLAPPED recvOverlapped;
 	WSAOVERLAPPED sendOverlapped;
+	CLockFreeQueue<Packet*> sendPacketQ;
+	Packet* pSendPacketArr[50];
 	RingBuffer recvRB;
-	RingBuffer sendRB;
 	BOOL Init(SOCKET clientSock, ULONGLONG ullClientID, SHORT shIdx);
 #ifdef IO_RET
 	ULONGLONG ullSend;

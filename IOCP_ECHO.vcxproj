@@ -104,6 +104,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -121,6 +122,7 @@
       <BrowseInformation>true</BrowseInformation>
       <Optimization>Disabled</Optimization>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -133,21 +135,19 @@
     </Bscmake>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="CheckMetaCntBits.cpp" />
-    <ClCompile Include="FreeList.cpp" />
     <ClCompile Include="LanServer.cpp" />
-    <ClCompile Include="LFStack.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Packet.cpp" />
     <ClCompile Include="RingBuffer.cpp" />
     <ClCompile Include="Session.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="CheckMetaCntBits.h" />
-    <ClInclude Include="FreeList.h" />
+    <ClInclude Include="CAddressTranslator.h" />
+    <ClInclude Include="CLockFreeObjectPool.h" />
+    <ClInclude Include="CLockFreeQueue.h" />
+    <ClInclude Include="CLockFreeStack.h" />
     <ClInclude Include="IHandler.h" />
     <ClInclude Include="LanServer.h" />
-    <ClInclude Include="LFStack.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="Packet.h" />
     <ClInclude Include="RingBuffer.h" />

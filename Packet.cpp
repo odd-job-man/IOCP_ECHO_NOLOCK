@@ -1,35 +1,26 @@
-#include <windows.h>
-#include "FreeList.h"
+
+#include <WinSock2.h>
+
+#include "CLockFreeQueue.h"
+#include "CLockFreeStack.h"
+#include "RingBuffer.h"
+#include "Session.h"
+#include "IHandler.h"
+#include "LanServer.h"
+
 #include "Packet.h"
+#include "CLockFreeObjectPool.h"
 
-static FreeList freeList;
-
-void InitProc(void* pData)
-{
-    Packet* pPacket = (Packet*)pData;
-    pPacket->front_ = Packet::NET_HEADER_SIZE;
-    pPacket->rear_ = Packet::NET_HEADER_SIZE;
-    pPacket->pBuffer_ = new char[Packet::DEFAULT_SIZE];
-}
+CLockFreeObjectPool<Packet, false> g_pool;
 
 Packet* Packet::Alloc()
 {
-    Packet* pPacket = (Packet*)::Alloc(&freeList);
-    pPacket->Clear();
-    return pPacket;
-}
-
-void Packet::MemPoolInit()
-{
-    ::Init(&freeList, sizeof(Packet), FALSE, InitProc, NULL);
+	Packet* pPacket = g_pool.Alloc();
+	pPacket->Clear();
+	return pPacket;
 }
 
 void Packet::Free(Packet* pPacket)
 {
-    ::Free(&freeList, pPacket);
-}
-
-void Packet::ReleasePacketPool()
-{
-    ::Clear(&freeList);
+	g_pool.Free(pPacket);
 }

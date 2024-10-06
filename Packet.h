@@ -1,7 +1,8 @@
 #pragma once
+
 #include <memory.h>
 
-typedef short NET_HEADER;
+using NET_HEADER = short;
 
 class Packet
 {
@@ -228,13 +229,11 @@ public:
 		front_ += sizeof(value);
 		return *this;
 	}
-	static Packet* Alloc();
-	static void MemPoolInit();
-	static void Free(Packet* pPacket);
-	static void ReleasePacketPool();
+
 	char* pBuffer_;
 	int front_ = NET_HEADER_SIZE;
 	int rear_ = NET_HEADER_SIZE;
+	int refCnt_ = 0;
 
 	Packet()
 		:front_{ NET_HEADER_SIZE }, rear_{ NET_HEADER_SIZE }
@@ -247,5 +246,44 @@ public:
 		delete[] pBuffer_;
 	}
 
-	friend unsigned __stdcall IOCPWorkerThread(LPVOID arg);
+	__forceinline LONG IncreaseRefCnt()
+	{
+		return InterlockedIncrement((LONG*)&refCnt_);
+	}
+	__forceinline LONG DecrementRefCnt()
+	{
+		return InterlockedDecrement((LONG*)&refCnt_);
+	}
+
+	private:
+	static Packet* Alloc();
+	static void Free(Packet* pPacket);
+	friend class SmartPacket;
+	friend void LanServer::RecvProc(Session* pSession, int numberOfBytesTransferred);
+	friend __forceinline void ClearPacket(Session* pSession);
+	friend __forceinline void ReleaseSendFailPacket(Session* pSession);
+};
+
+class SmartPacket
+{
+public:
+	Packet* pPacket_;
+	SmartPacket()
+	{
+		pPacket_ = Packet::Alloc();
+		pPacket_->IncreaseRefCnt();
+	}
+
+	~SmartPacket()
+	{
+		if(pPacket_->DecrementRefCnt() == 0)
+		{
+			Packet::Free(pPacket_);
+		}
+	}
+
+	__forceinline Packet* GetPacket() 
+	{
+		return pPacket_;
+	}
 };
