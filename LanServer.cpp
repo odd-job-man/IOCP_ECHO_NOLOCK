@@ -487,20 +487,23 @@ void LanServer::RecvProc(Session* pSession, int numberOfByteTransferred)
 	using LanHeader = Packet::LanHeader;
 
 	PROFILE(1, "RecvProc")
-	LanHeader header;
 	Packet* pPacket = Packet::Alloc<Lan>();
 	pSession->recvRB_.MoveInPos(numberOfByteTransferred);
 	while (1)
 	{
-		if (pSession->recvRB_.Peek((char*)&header.payloadLen_, sizeof(LanHeader)) == 0)
+
+		if (pSession->recvRB_.Peek(pPacket->pBuffer_, sizeof(LanHeader)) == 0)
 			break;
 
-		if (pSession->recvRB_.GetUseSize() < sizeof(LanHeader) + header.payloadLen_)
+		int payloadLen = ((LanHeader*)pPacket->pBuffer_)->payloadLen_;
+
+		if (pSession->recvRB_.GetUseSize() < sizeof(LanHeader) + payloadLen)
 			break;
 
-		pSession->recvRB_.Dequeue(pPacket->GetBufferPtr(), sizeof(LanHeader) + header.payloadLen_);
-		pPacket->MoveWritePos(sizeof(LanHeader) + header.payloadLen_);
-		pPacket->MoveReadPos(sizeof(LanHeader));
+		pSession->recvRB_.MoveOutPos(sizeof(LanHeader));
+
+		pSession->recvRB_.Dequeue(pPacket->GetPayloadStartPos<Lan>(), payloadLen);
+		pPacket->MoveWritePos(payloadLen);
 		OnRecv(pSession->id_, pPacket);
 		pPacket->Clear<Lan>();
 		InterlockedIncrement(&lRecvTPS_);

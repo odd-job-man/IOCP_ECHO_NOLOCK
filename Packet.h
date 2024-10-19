@@ -77,9 +77,17 @@ public:
 		return rear_ - front_;
 	}
 
-	char* GetBufferPtr(void)
+	template<ServerType st>
+	char* GetPayloadStartPos(void)
 	{
-		return pBuffer_ + sizeof(LanHeader);
+		if constexpr (st == Lan)
+		{
+			return pBuffer_ + sizeof(LanHeader);
+		}
+		else
+		{
+			return pBuffer_ + sizeof(NetHeader);
+		}
 	}
 
 	int MoveWritePos(int sizeToWrite)
