@@ -1,30 +1,54 @@
 #pragma once
 
 #include <memory.h>
+#include "CLockFreeQueue.h"
+#include "CLockFreeStack.h"
+#include "RingBuffer.h"
+#include "Session.h"
+#include "IHandler.h"
+#include "LanServer.h"
+
+#define QUEUE
+#include "CTlsObjectPool.h"
 
 using NET_HEADER = short;
+
+enum ServerType
+{
+	Net,
+	Lan
+};
 
 class Packet
 {
 public:
-	enum RING_SIZE
+	struct LanHeader
 	{
-		RINGBUFFER_SIZE = 10000
+		short payloadLen_;
 	};
 
-	enum NET_HEADER_SIZE
+	struct NetHeader
 	{
-		NET_HEADER_SIZE = sizeof(short)
+		unsigned char code_;
+		unsigned short payloadLen_;
+		unsigned char randomKey_;
+		unsigned char checkSum_;
 	};
 
-	enum PACKET_SIZE
-	{
-		DEFAULT_SIZE = (RINGBUFFER_SIZE / 8 + NET_HEADER_SIZE)
-	};
+	static constexpr int RINGBUFFER_SIZE = 10000;
+	static constexpr int BUFFER_SIZE = (RINGBUFFER_SIZE / 8) + sizeof(NetHeader);
 
+	template<ServerType type>
 	void Clear(void)
 	{
-		front_ = rear_ = NET_HEADER_SIZE;
+		if constexpr (type == Net)
+		{
+			front_ = rear_ = sizeof(NetHeader);
+		}
+		else
+		{
+			front_ = rear_ = sizeof(LanHeader);
+		}
 	}
 
 	int GetData(char* pDest, int sizeToGet)
@@ -55,7 +79,7 @@ public:
 
 	char* GetBufferPtr(void)
 	{
-		return pBuffer_ + NET_HEADER_SIZE;
+		return pBuffer_ + sizeof(LanHeader);
 	}
 
 	int MoveWritePos(int sizeToWrite)
@@ -231,15 +255,16 @@ public:
 	}
 
 	char* pBuffer_;
-	int front_ = NET_HEADER_SIZE;
-	int rear_ = NET_HEADER_SIZE;
+	int front_;
+	int rear_;
 	int refCnt_ = 0;
 
+#pragma warning(disable : 26495)
 	Packet()
-		:front_{ NET_HEADER_SIZE }, rear_{ NET_HEADER_SIZE }
 	{
-		pBuffer_ = new char[DEFAULT_SIZE];
+		pBuffer_ = new char[BUFFER_SIZE];
 	}
+#pragma warning(default : 26495)
 
 	~Packet()
 	{
@@ -255,9 +280,45 @@ public:
 		return InterlockedDecrement((LONG*)&refCnt_);
 	}
 
+	template<ServerType st>
+	void SetHeader()
+	{
+		if constexpr (st == Net)
+		{
+			NetHeader* pHeader = (NetHeader*)pBuffer_;
+			pHeader->code_ = 0x89;
+			pHeader->payloadLen_ = rear_ - front_;
+			pHeader->randomKey_ = rand();
+
+			unsigned char* const pPayload = (unsigned char*)pHeader + sizeof(NetHeader);
+			unsigned long long sum = 0;
+			for (int i = 0; i < pHeader->payloadLen_; ++i)
+			{
+				sum += pPayload[i];
+			}
+			pHeader->checkSum_ = sum % UCHAR_MAX;
+		}
+		else
+		{
+			((LanHeader*)pBuffer_)->payloadLen_ = rear_ - front_;
+		}
+	}
+
+	template<ServerType type>
+	static Packet* Alloc()
+	{
+		Packet* pPacket = packetPool.Alloc();
+		pPacket->Clear<type>();
+		return pPacket;
+	}
+
 	private:
-	static Packet* Alloc();
-	static void Free(Packet* pPacket);
+	static inline CTlsObjectPool<Packet, false> packetPool;
+	static void Free(Packet* pPacket)
+	{
+		packetPool.Free(pPacket);
+	}
+
 	friend class SmartPacket;
 	friend void LanServer::RecvProc(Session* pSession, int numberOfBytesTransferred);
 	friend __forceinline void ClearPacket(Session* pSession);
@@ -268,9 +329,9 @@ class SmartPacket
 {
 public:
 	Packet* pPacket_;
-	SmartPacket()
+	SmartPacket(Packet*&& pPacket)
+		:pPacket_{pPacket}
 	{
-		pPacket_ = Packet::Alloc();
 		pPacket_->IncreaseRefCnt();
 	}
 
@@ -282,8 +343,20 @@ public:
 		}
 	}
 
+	__forceinline Packet& operator*()
+	{
+		return *pPacket_;
+	}
+
+	__forceinline Packet* operator->()
+	{
+		return pPacket_;
+	}
+
 	__forceinline Packet* GetPacket() 
 	{
 		return pPacket_;
 	}
 };
+
+#undef QUEUE

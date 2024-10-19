@@ -137,7 +137,7 @@
   <ItemGroup>
     <ClCompile Include="LanServer.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Packet.cpp" />
+    <ClCompile Include="MultithreadProfiler.cpp" />
     <ClCompile Include="RingBuffer.cpp" />
     <ClCompile Include="Session.cpp" />
   </ItemGroup>
@@ -146,9 +146,11 @@
     <ClInclude Include="CLockFreeObjectPool.h" />
     <ClInclude Include="CLockFreeQueue.h" />
     <ClInclude Include="CLockFreeStack.h" />
+    <ClInclude Include="CTlsObjectPool.h" />
     <ClInclude Include="IHandler.h" />
     <ClInclude Include="LanServer.h" />
     <ClInclude Include="Logger.h" />
+    <ClInclude Include="MultithreadProfiler.h" />
     <ClInclude Include="Packet.h" />
     <ClInclude Include="RingBuffer.h" />
     <ClInclude Include="Session.h" />

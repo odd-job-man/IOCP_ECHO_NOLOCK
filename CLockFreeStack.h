@@ -4,6 +4,8 @@
 #include <optional>
 
 #include "CLockFreeObjectPool.h"
+#define QUEUE
+#include "CTlsObjectPool.h"
 
 
 template<typename T>
@@ -20,7 +22,7 @@ private:
 		}
 	};
 
-	CLockFreeObjectPool<Node, true> pool_;
+	CTlsObjectPool<Node, true> pool_;
 	alignas(64) uintptr_t metaTop_;
 	alignas(64) size_t metaCnt_;
 
@@ -77,4 +79,4 @@ public:
 
 
 };
-
+#undef QUEUE

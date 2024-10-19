@@ -26,13 +26,13 @@ class CLockFreeObjectPool
 	alignas(64) uintptr_t metaTop_;
 	alignas(64) long capacity_;
 	alignas(64) long size_;
-	alignas(64) size_t metaCnt;
+	alignas(64) size_t metaCnt_;
 
 public:
 	CLockFreeObjectPool() 
 		:metaTop_{ 0 }, capacity_{ 0 }, size_{ 0 }
 	{
-		InterlockedExchange(&metaCnt, 0);
+		InterlockedExchange(&metaCnt_, 0);
 	}
 
 	template<typename... Types> requires (bPlacementNew || (sizeof...(Types) == 0))
@@ -41,7 +41,6 @@ public:
 		uintptr_t metaTop;
 		FreeListNode* pRealTop;
 		uintptr_t newMetaTop;
-
 		do
 		{
 			metaTop = metaTop_;
@@ -76,7 +75,7 @@ public:
 
 		uintptr_t newMetaTop = CAddressTranslator::GetMetaAddr
 		(
-			CAddressTranslator::GetCnt(&metaCnt), 
+			CAddressTranslator::GetCnt(&metaCnt_), 
 			(uintptr_t)pNewRealTop
 		);
 

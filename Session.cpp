@@ -5,15 +5,12 @@
 #include "RingBuffer.h"
 
 #include "Session.h"
-
 BOOL Session::Init(SOCKET clientSock, ULONGLONG ullClientID, SHORT shIdx)
 {
-    sock = clientSock;
-    bSendingInProgress = FALSE;
-    _InterlockedExchange((LONG*)&bUsing, TRUE);
-    MAKE_SESSION_INDEX(id, ullClientID, shIdx);
-    IoCnt = 0;
-    lSendBufNum = 0;
-    recvRB.ClearBuffer();
+    sock_ = clientSock;
+    bSendingInProgress_ = FALSE;
+    id_.ullId = ((ullClientID << 16) ^ shIdx);
+    lSendBufNum_ = 0;
+    recvRB_.ClearBuffer();
     return TRUE;
 }

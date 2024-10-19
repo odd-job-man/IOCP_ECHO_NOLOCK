@@ -1,11 +1,4 @@
 #pragma once
-#define GET_SESSION_INDEX(id) (id.ullId & 0xFFFF)
-#define MAKE_SESSION_INDEX(Ret,ullID,index)\
-do{\
-Ret.ullId = ullID << 16;\
-Ret.ullId ^= index;\
-}while(0)\
-
 union ID
 {
 	ULONGLONG ullId;
@@ -15,18 +8,23 @@ class Packet;
 
 struct Session
 {
-	SOCKET sock;
-	ID id;
-	BOOL bSendingInProgress;
-	BOOL bUsing;
-	LONG lSendBufNum;
-	LONG IoCnt;
+	static constexpr LONG RELEASE_FLAG = 0x80000000;
+	SOCKET sock_;
+	ID id_;
+	LONG lSendBufNum_;
 	WSAOVERLAPPED recvOverlapped;
 	WSAOVERLAPPED sendOverlapped;
-	CLockFreeQueue<Packet*> sendPacketQ;
-	Packet* pSendPacketArr[50];
-	RingBuffer recvRB;
+	LONG IoCnt_;
+	CLockFreeQueue<Packet*> sendPacketQ_;
+	BOOL bSendingInProgress_;
+	Packet* pSendPacketArr_[50];
+	RingBuffer recvRB_;
 	BOOL Init(SOCKET clientSock, ULONGLONG ullClientID, SHORT shIdx);
+	inline static size_t GET_SESSION_INDEX(ID id)
+	{
+		return id.ullId & 0xFFFF;
+	}
+
 #ifdef IO_RET
 	ULONGLONG ullSend;
 	ULONGLONG ullRecv;
