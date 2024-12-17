@@ -1,0 +1,153 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="ServerCommon">
+      <UniqueIdentifier>{b58fc031-b4cc-44cf-88a5-e4711da079e3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ServerCommon\DS">
+      <UniqueIdentifier>{09b905c0-46f0-456b-8f07-25369b1b9d59}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ServerCommon\DB">
+      <UniqueIdentifier>{ff01c286-9791-4a5a-963c-6d0a3fc9f22e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ServerCommon\Job">
+      <UniqueIdentifier>{ca6c7af9-fcf6-4d34-aab2-10d688fc592d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ServerCommon\Logger">
+      <UniqueIdentifier>{1be7b10c-ba0b-4ef5-b3ae-97c1721021ee}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ServerCommon\Monitor">
+      <UniqueIdentifier>{a0b975bd-1034-44e7-9bd6-e4fe4c9ab67c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ServerCommon\NetWork">
+      <UniqueIdentifier>{617f84e9-8e90-4239-bb93-636772896ecb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ServerCommon\Parser">
+      <UniqueIdentifier>{955b5954-161b-446d-b074-a32101ac4bb0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ServerCommon\UpdateAndTimer">
+      <UniqueIdentifier>{6753ac50-43f6-4e3e-a41a-744113a6569b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="LanSession.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="LanServer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ServerCommon\ServerCommon\DataStructure\CLinkedList.cpp">
+      <Filter>ServerCommon\DS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ServerCommon\ServerCommon\DB\QueryFactory.cpp">
+      <Filter>ServerCommon\DB</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ServerCommon\ServerCommon\Monitor\HMonitor.cpp">
+      <Filter>ServerCommon\Monitor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ServerCommon\ServerCommon\NetWork\RingBuffer.cpp">
+      <Filter>ServerCommon\NetWork</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ServerCommon\ServerCommon\UpdateAndTimer\UpdateBase.cpp">
+      <Filter>ServerCommon\UpdateAndTimer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ServerCommon\ServerCommon\UpdateAndTimer\Timer.cpp">
+      <Filter>ServerCommon\UpdateAndTimer</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="LanSession.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="LanServer.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\DataStructure\CLinkedList.h">
+      <Filter>ServerCommon\DS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\DataStructure\CLockFreeObjectPool.h">
+      <Filter>ServerCommon\DS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\DataStructure\CLockFreeQueue.h">
+      <Filter>ServerCommon\DS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\DataStructure\CLockFreeStack.h">
+      <Filter>ServerCommon\DS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\DataStructure\CTlsObjectPool.h">
+      <Filter>ServerCommon\DS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\DataStructure\CAddressTranslator.h">
+      <Filter>ServerCommon\DS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\DB\QueryFactory.h">
+      <Filter>ServerCommon\DB</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\Job\MyJob.h">
+      <Filter>ServerCommon\Job</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\Logger\Logger.h">
+      <Filter>ServerCommon\Logger</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\Monitor\HMonitor.h">
+      <Filter>ServerCommon\Monitor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\Monitor\Monitorable.h">
+      <Filter>ServerCommon\Monitor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\NetWork\RingBuffer.h">
+      <Filter>ServerCommon\NetWork</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\NetWork\Packet.h">
+      <Filter>ServerCommon\NetWork</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\UpdateAndTimer\UpdateBase.h">
+      <Filter>ServerCommon\UpdateAndTimer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\UpdateAndTimer\Timer.h">
+      <Filter>ServerCommon\UpdateAndTimer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\Parser\Parser.h">
+      <Filter>ServerCommon\Parser</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\ServerCommon\ServerCommon\DB\libcrypto-3-x64.dll">
+      <Filter>ServerCommon\DB</Filter>
+    </None>
+    <None Include="..\ServerCommon\ServerCommon\DB\libmysql.dll">
+      <Filter>ServerCommon\DB</Filter>
+    </None>
+    <None Include="..\ServerCommon\ServerCommon\DB\libssl-3-x64.dll">
+      <Filter>ServerCommon\DB</Filter>
+    </None>
+    <None Include="..\ServerCommon\ServerCommon\Logger\LoggerMT.dll">
+      <Filter>ServerCommon\Logger</Filter>
+    </None>
+    <None Include="..\ServerCommon\ServerCommon\Parser\TextParser.dll">
+      <Filter>ServerCommon\Parser</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="..\ServerCommon\ServerCommon\DB\libmysql.lib">
+      <Filter>ServerCommon\DB</Filter>
+    </Library>
+    <Library Include="..\ServerCommon\ServerCommon\Logger\LoggerMT.lib">
+      <Filter>ServerCommon\Logger</Filter>
+    </Library>
+    <Library Include="..\ServerCommon\ServerCommon\Parser\TextParser.lib">
+      <Filter>ServerCommon\Parser</Filter>
+    </Library>
+  </ItemGroup>
+</Project>
