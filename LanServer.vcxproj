@@ -134,12 +134,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\ServerCommon\ServerCommon\DataStructure\CLinkedList.cpp" />
+    <ClCompile Include="..\ServerCommon\ServerCommon\DB\DBWriteThreadBase.cpp" />
     <ClCompile Include="..\ServerCommon\ServerCommon\DB\QueryFactory.cpp" />
     <ClCompile Include="..\ServerCommon\ServerCommon\Monitor\HMonitor.cpp" />
     <ClCompile Include="..\ServerCommon\ServerCommon\NetWork\RingBuffer.cpp" />
-    <ClCompile Include="..\ServerCommon\ServerCommon\UpdateAndTimer\Timer.cpp" />
+    <ClCompile Include="..\ServerCommon\ServerCommon\UpdateAndTimer\Scheduler.cpp" />
     <ClCompile Include="..\ServerCommon\ServerCommon\UpdateAndTimer\UpdateBase.cpp" />
     <ClCompile Include="LanServer.cpp" />
+    <ClCompile Include="LanServerTimeOut.cpp" />
     <ClCompile Include="LanSession.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
@@ -150,6 +152,7 @@
     <ClInclude Include="..\ServerCommon\ServerCommon\DataStructure\CLockFreeQueue.h" />
     <ClInclude Include="..\ServerCommon\ServerCommon\DataStructure\CLockFreeStack.h" />
     <ClInclude Include="..\ServerCommon\ServerCommon\DataStructure\CTlsObjectPool.h" />
+    <ClInclude Include="..\ServerCommon\ServerCommon\DB\DBWriteThreadBase.h" />
     <ClInclude Include="..\ServerCommon\ServerCommon\DB\QueryFactory.h" />
     <ClInclude Include="..\ServerCommon\ServerCommon\Job\MyJob.h" />
     <ClInclude Include="..\ServerCommon\ServerCommon\Logger\Logger.h" />
@@ -158,9 +161,10 @@
     <ClInclude Include="..\ServerCommon\ServerCommon\NetWork\Packet.h" />
     <ClInclude Include="..\ServerCommon\ServerCommon\NetWork\RingBuffer.h" />
     <ClInclude Include="..\ServerCommon\ServerCommon\Parser\Parser.h" />
-    <ClInclude Include="..\ServerCommon\ServerCommon\UpdateAndTimer\Timer.h" />
+    <ClInclude Include="..\ServerCommon\ServerCommon\UpdateAndTimer\Scheduler.h" />
     <ClInclude Include="..\ServerCommon\ServerCommon\UpdateAndTimer\UpdateBase.h" />
     <ClInclude Include="LanServer.h" />
+    <ClInclude Include="LanServerTimeOut.h" />
     <ClInclude Include="LanSession.h" />
   </ItemGroup>
   <ItemGroup>

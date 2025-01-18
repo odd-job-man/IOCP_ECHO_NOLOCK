@@ -62,8 +62,14 @@
     <ClCompile Include="..\ServerCommon\ServerCommon\UpdateAndTimer\UpdateBase.cpp">
       <Filter>ServerCommon\UpdateAndTimer</Filter>
     </ClCompile>
-    <ClCompile Include="..\ServerCommon\ServerCommon\UpdateAndTimer\Timer.cpp">
+    <ClCompile Include="LanServerTimeOut.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ServerCommon\ServerCommon\UpdateAndTimer\Scheduler.cpp">
       <Filter>ServerCommon\UpdateAndTimer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ServerCommon\ServerCommon\DB\DBWriteThreadBase.cpp">
+      <Filter>ServerCommon\DB</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -115,11 +121,17 @@
     <ClInclude Include="..\ServerCommon\ServerCommon\UpdateAndTimer\UpdateBase.h">
       <Filter>ServerCommon\UpdateAndTimer</Filter>
     </ClInclude>
-    <ClInclude Include="..\ServerCommon\ServerCommon\UpdateAndTimer\Timer.h">
-      <Filter>ServerCommon\UpdateAndTimer</Filter>
-    </ClInclude>
     <ClInclude Include="..\ServerCommon\ServerCommon\Parser\Parser.h">
       <Filter>ServerCommon\Parser</Filter>
+    </ClInclude>
+    <ClInclude Include="LanServerTimeOut.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\UpdateAndTimer\Scheduler.h">
+      <Filter>ServerCommon\UpdateAndTimer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ServerCommon\ServerCommon\DB\DBWriteThreadBase.h">
+      <Filter>ServerCommon\DB</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

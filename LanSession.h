@@ -14,16 +14,18 @@ struct LanSession
 	BOOL bDisconnectCalled_;
 	MYOVERLAPPED recvOverlapped;
 	MYOVERLAPPED sendOverlapped;
-	LONG IoCnt_;
+	LONG refCnt_;
 	CLockFreeQueue<Packet*> sendPacketQ_;
 	BOOL bSendingInProgress_;
 	BOOL bSendingAtWorker_;
 	Packet* pSendPacketArr_[50];
 	RingBuffer recvRB_;
+	WCHAR ip_[16];
+	USHORT port_;
 	BOOL Init(SOCKET clientSock, ULONGLONG ullClientId, SHORT shIdx);
 
 	LanSession()
-		:IoCnt_{ LanSession::RELEASE_FLAG | 0 }
+		:refCnt_{ LanSession::RELEASE_FLAG | 0 }
 	{}
 
 	inline static short GET_SESSION_INDEX(ULONGLONG id)
